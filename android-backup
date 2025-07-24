@@ -77,7 +77,7 @@ for device_conf in "$SCRIPT_DIR/devices/"*.conf; do
 
   # 增量同步并排除
   echo "→ 正在同步到 $BACKUP_DIR"
-  rsync -a --delete --link-dest=$LINK_DEST \
+  rsync -a --delete --info=progress2 --link-dest=$LINK_DEST \
     --exclude-from="${EXCLUDE_FILE:-$DEFAULT_EXCLUDE_FILE}" \
     "$TMP_DIR/" "$BACKUP_DIR/"
 
