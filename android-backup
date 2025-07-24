@@ -1,0 +1,79 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# --- 1. 加载全局配置 ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/global.conf"
+
+# 自动查找 adb
+if [[ -z "${ADB_PATH}" ]]; then
+  if command -v adb >/dev/null; then
+    ADB_PATH="$(command -v adb)"
+  elif [[ -x "$HOME/Android/Sdk/platform-tools/adb" ]]; then
+    ADB_PATH="$HOME/Android/Sdk/platform-tools/adb"
+  else
+    echo "找不到 adb，请设置 ADB_PATH 或安装 adb"
+    exit 1
+  fi
+fi
+
+# --- 2. 遍历所有设备配置 ---
+for device_conf in "$SCRIPT_DIR/devices/"*.conf; do
+  source "$device_conf"
+
+  DATE_DIR=$(date +%F)
+  DEVICE_BACK_DIR="$BACKUP_BASE_DIR/$DEVICE_NAME"
+  BACKUP_DIR="$DEVICE_BACK_DIR/$DATE_DIR"
+  mkdir -p "$DEVICE_BACK_DIR"
+  LATEST_LINK="$DEVICE_BACK_DIR/latest"
+
+  # 检查是否已备份
+  if [[ -d "$BACKUP_DIR" ]]; then
+      read -p "Backup for $DEVICE_NAME already exists for $DATE_DIR. Overwrite? (y/N): " confirm
+      if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+          echo "Skipping $DEVICE_NAME"
+          continue
+      fi
+      rm -rf "$BACKUP_DIR"
+  fi
+
+  # 查找前一个备份目录
+  if [[ -L "$LATEST_LINK" ]]; then
+      LINK_DEST=$(readlink -f "$LATEST_LINK" || true) # Mac readlink -f exit 1
+  else
+      LINK_DEST=""
+  fi
+  echo "LINK_DEST=$LINK_DEST"
+
+  echo "=== 开始备份设备 $DEVICE_NAME ($DEVICE_SERIAL) 到 $BACKUP_DIR ==="
+
+  # 先下载到临时目录
+  TMP_DIR="$DEVICE_BACK_DIR-tmp"
+  mkdir -p "$TMP_DIR"
+  rm -rf "$TMP_DIR/*"
+
+  # 拉取各个要备份的目录
+  for src_dir in "${INCLUDE_DIRS[@]}"; do
+    if ! adb -s "$DEVICE_SERIAL" shell "test -d \"${src_dir}\""; then
+      echo "⚠️ 目录 '${src_dir}' 不存在，跳过"
+      continue
+    fi
+    echo "→ 正在拉取 $src_dir"
+    # 获得要备份目录的相对路径
+    REL_PATH=$(echo "$src_dir" | sed 's#^/sdcard/##')
+    # 拉取到临时目录
+    "$ADB_PATH" -s "$DEVICE_SERIAL" pull "$src_dir" "$TMP_DIR/$REL_PATH" >/dev/null
+  done
+
+  # 增量同步并排除
+  echo "→ 正在同步到 $BACKUP_DIR"
+  rsync -a --delete --link-dest=$LINK_DEST \
+    --exclude-from="${EXCLUDE_FILE:-$DEFAULT_EXCLUDE_FILE}" \
+    "$TMP_DIR/" "$BACKUP_DIR/"
+
+  rm -rf "$TMP_DIR"
+  ln -sfn "$DATE_DIR" $DEVICE_BACK_DIR/latest
+
+  echo "=== $DEVICE_NAME 备份完成 ✅ ==="
+done
