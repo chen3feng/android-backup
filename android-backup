@@ -18,6 +18,15 @@ if [[ -z "${ADB_PATH}" ]]; then
   fi
 fi
 
+# 检查至少有一台设备连接
+DEVICE_INFO=$("$ADB_PATH" devices -l | grep 'device:')
+DEVICES=$(echo "$DEVICE_INFO" | awk '{print $1}')
+if [[ -z "$DEVICES" ]]; then
+  echo "没有连接任何设备，退出"
+  exit 1
+fi
+echo -e "检测到设备列表：\n$DEVICE_INFO"
+
 # --- 2. 遍历所有设备配置 ---
 for device_conf in "$SCRIPT_DIR/devices/"*.conf; do
   source "$device_conf"
