@@ -49,11 +49,11 @@ for device_conf in "$SCRIPT_DIR/devices/"*.conf; do
 
   # 查找前一个备份目录
   if [[ -L "$LATEST_LINK" ]]; then
-      LINK_DEST=$(readlink -f "$LATEST_LINK" || true) # Mac readlink -f exit 1
+      LINK_DEST_OPT="--link-dest=$LATEST_LINK"
   else
-      LINK_DEST=""
+      LINK_DEST_OPT=""
   fi
-  echo "LINK_DEST=$LINK_DEST"
+  echo "LINK_DEST_OPT=$LINK_DEST_OPT"
 
   echo "=== 开始备份设备 $DEVICE_NAME ($DEVICE_SERIAL) 到 $BACKUP_DIR ==="
 
@@ -72,16 +72,16 @@ for device_conf in "$SCRIPT_DIR/devices/"*.conf; do
     # 获得要备份目录的相对路径
     REL_PATH=$(echo "$src_dir" | sed 's#^/sdcard/##')
     # 拉取到临时目录
-    "$ADB_PATH" -s "$DEVICE_SERIAL" pull "$src_dir" "$TMP_DIR/$REL_PATH" >/dev/null
+    # "$ADB_PATH" -s "$DEVICE_SERIAL" pull -a "$src_dir" "$TMP_DIR/$REL_PATH" >/dev/null
   done
 
   # 增量同步并排除
   echo "→ 正在同步到 $BACKUP_DIR"
-  rsync -a --delete --info=progress2 --link-dest=$LINK_DEST \
+  rsync -a --delete --ignore-times $LINK_DEST_OPT \
     --exclude-from="${EXCLUDE_FILE:-$DEFAULT_EXCLUDE_FILE}" \
     "$TMP_DIR/" "$BACKUP_DIR/"
 
-  rm -rf "$TMP_DIR"
+  # rm -rf "$TMP_DIR"
   ln -sfn "$DATE_DIR" $DEVICE_BACK_DIR/latest
 
   echo "=== $DEVICE_NAME 备份完成 ✅ ==="
