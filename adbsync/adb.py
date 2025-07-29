@@ -29,12 +29,12 @@ class ADB():
 
     def run(self, cmd: typing.List[str], *args, **kwargs) -> int:
         full_cmd = self.extend_cmd(cmd)
-        print(f"Running command: {' '.join(full_cmd)}")
+        # print(f"Running command: {' '.join(full_cmd)}")
         return subprocess.call(full_cmd, *args, **kwargs)
 
     def check_output(self, cmd: typing.List[str], *args, **kwargs) -> str:
         full_cmd = self.extend_cmd(cmd)
-        print(f"Running command: {' '.join(full_cmd)}")
+        # print(f"Running command: {' '.join(full_cmd)}")
         return subprocess.check_output(full_cmd, text=True, *args, **kwargs)
 
     def extend_cmd(self, cmd: typing.List[str]) -> typing.List[str]:
@@ -103,12 +103,11 @@ class ADB():
         self.run(cmd)
         self.remove_excluded(target_dir, source_dir, exclude_file)
 
-
     def pull_files(self, root, files, target_dir):
         for f in files:
             ff = os.path.join(root, f)
             dest_dir = os.path.join(target_dir, os.path.dirname(f))
             if not os.path.exists(dest_dir):
-                os.mkdirs(dest_dir)
+                os.makedirs(dest_dir)
             cmd = ['pull', '-a', ff, dest_dir]
             self.run(cmd)
