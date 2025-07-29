@@ -46,7 +46,7 @@ def main():
             source_dir=source_dir,
             exclude_file=config.DEFAULT_EXCLUDE_FILE,
             target_dir=os.path.join(config.BACKUP_BASE_DIR, device_config.DEVICE_NAME),
-            old_backup_dir=device_config.DEVICE_NAME
+            old_backup_dir=None
         )
 
 

@@ -6,7 +6,7 @@ __all__ = ['pull']
 
 
 def pull(adb_path: str, serial: str,
-         root: str, source_dir: str, target_dir: str, old_backup_dir: str, exclude_file) -> int:
+         root: str, source_dir: str, target_dir: str, old_backup_dir: str, exclude_file):
     """
     Pull a file or directory from the device to the local filesystem.
 
