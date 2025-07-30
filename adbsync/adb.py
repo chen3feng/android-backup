@@ -4,22 +4,45 @@ import shlex
 import subprocess
 import typing
 
+import pathspec
 
-def scan_local_files(root: str, subdir: str = "") -> typing.Dict[str, typing.Tuple[int, float]]:
-    result = {}
+DirScanResultType = typing.Tuple[typing.Dict[str, int], typing.Dict[str, typing.Tuple[int, float]]]
+
+def scan_local_dir(root: str, subdir: str = "", filter: pathspec.PathSpec = None) -> DirScanResultType:
+    dirs, files = {}, {}
     base = os.path.join(root, subdir)
-    print(base)
     for dirpath, _, filenames in os.walk(base):
+        rel_dirpath = os.path.relpath(dirpath, root).replace("\\", "/")
+        try:
+            if not filter.match_file(rel_dirpath):
+                stat = os.stat(dirpath)
+                dirs[rel_dirpath] = stat.st_mtime
+            # else:
+            #     print(f'Exclude {rel_dirpath}')
+        except FileNotFoundError:
+            # 目录可能在遍历过程中被删除
+            pass
         for name in filenames:
             full_path = os.path.join(dirpath, name)
             rel_path = os.path.relpath(full_path, root).replace("\\", "/")
+            if filter.match_file(rel_path):
+                # print(f'Exclude {rel_path}')
+                continue
             try:
                 stat = os.stat(full_path)
-                result[rel_path] = (stat.st_size, stat.st_mtime)
+                files[rel_path] = (stat.st_size, stat.st_mtime)
             except FileNotFoundError:
                 # 文件可能在遍历过程中被删除
                 continue
-    return result
+    return dirs, files
+
+
+def load_exclude_file(exclude_file: str) -> pathspec.PathSpec:
+    if not exclude_file:
+        return pathspec.PathSpec()
+    with open(exclude_file, 'r') as fh:
+        spec = pathspec.PathSpec.from_lines('gitwildmatch', fh)
+        return spec
 
 
 class ADB():
@@ -48,23 +71,46 @@ class ADB():
         return self.run(['shell'] + [cmd])
 
     def pull(self, root, source_dir, target_dir, old_backup_dir, exclude_file):
-        remote_files = self.scan_remote_files(root, source_dir, exclude_file)
-        local_files = scan_local_files(target_dir, source_dir)
+        print(f'Pulling {source_dir}...')
+        filter = load_exclude_file(exclude_file)
+        remote_dirs, remote_files = self.scan_remote_dir(root, source_dir, filter)
+        local_dirs, local_files = scan_local_dir(target_dir, source_dir, filter)
         pull_files = self.get_pull_files(remote_files, local_files)
-        # self.pull_dir(root, source_dir, target_dir, old_backup_dir, exclude_file)
+        # self.pull_dir(root, source_dir, target_dir, old_backup_dir, filter)
         self.pull_files(root, pull_files, target_dir)
 
-    def scan_remote_files(self, root, source_dir, exclude_file):
+    def scan_remote_dir(self, root, source_dir, filter):
+        # TODO: call find only once
         find_cmd = ['find', os.path.join(root, source_dir), '-type', 'f', '-printf', '%s %T@ %P\n']
         cmd = ['shell', " ".join(shlex.quote(a) for a in find_cmd)]
         output = self.check_output(cmd)
-        return  self.parse_find_outout(root, source_dir, output)
+        files = self.parse_find_file_outout(root, source_dir, output, filter)
+
+        find_cmd = ['find', os.path.join(root, source_dir), '-type', 'd', '-printf', '%T@ %P\n']
+        cmd = ['shell', " ".join(shlex.quote(a) for a in find_cmd)]
+        output = self.check_output(cmd)
+        dirs = self.parse_find_dir_output(root, source_dir, output, filter)
+
+        return dirs, files
 
     def print_files(self, files):
         for path, (size, mtime) in itertools.islice(files.items(), 10):
             print(f"{path}: {size} bytes, modified at {mtime}")
 
-    def parse_find_outout(self, root, source_dir, output):
+    def parse_find_dir_output(self, root, source_dir, output, filter):
+        result = {}
+        for line in output.splitlines():
+            parts = line.strip().split(" ", 1)
+            if len(parts) < 2:
+                # The source_dir itself
+                continue
+            mtime = float(parts[0])
+            path = parts[1]
+            if not filter.match_file(path):
+                result[os.path.join(source_dir, path)] = mtime
+        return result
+
+    def parse_find_file_outout(self, root, source_dir, output, filter):
         result = {}
         for line in output.splitlines():
             parts = line.strip().split(" ", 2)
@@ -73,7 +119,8 @@ class ADB():
             size = int(parts[0])
             mtime = float(parts[1])
             path = parts[2]
-            result[os.path.join(source_dir, path)] = (size, mtime)
+            if not filter.match_file(path):
+                result[os.path.join(source_dir, path)] = (size, mtime)
         return result
 
     def get_pull_files(self, remote_files, local_files):
@@ -88,10 +135,10 @@ class ADB():
                 result.append(path)
         return result
 
-    def remove_excluded(self, root, source_dir, exclude_file: str) -> int:
+    def remove_excluded(self, root, source_dir, filter: pathspec.PathSpec) -> int:
         pass
 
-    def pull_dir(self, root, source_dir, target_dir, old_backup_dir, exclude_file):
+    def pull_dir(self, root, source_dir, target_dir, old_backup_dir, filter):
         # Construct the pull command
         # Note the use of '-a' to preserve file attributes
         # The target directory is the parent directory of the source_dir to ensure the structure is maintained.
@@ -101,7 +148,7 @@ class ADB():
             os.makedirs(dest_dir)
         cmd = ['pull', '-a', os.path.join(root, source_dir), dest_dir]
         self.run(cmd)
-        self.remove_excluded(target_dir, source_dir, exclude_file)
+        self.remove_excluded(target_dir, source_dir, filter)
 
     def pull_files(self, root, files, target_dir):
         for f in files:
