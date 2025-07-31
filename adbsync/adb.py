@@ -103,7 +103,7 @@ class ADB():
         for line in output.splitlines():
             parts = line.strip().split(" ", 1)
             if len(parts) < 2:
-                # The source_dir itself
+                # Exclude the source_dir itself
                 continue
             mtime = float(parts[0])
             path = parts[1]

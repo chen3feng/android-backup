@@ -21,7 +21,7 @@ def main():
     if not adb_path:
         print("ADB_PATH not found in configuration or environment.")
         return
-    
+
     print(f"Using adb path: {adb_path}")
 
     serial = find_device_serial(adb_path)
@@ -42,14 +42,15 @@ def main():
     print(f"Loaded device configuration: {device_config.DEVICE_NAME}")
 
     for root, source_dir in device_config.INCLUDE_DIRS:
-        print(f"Pulling from {root}/{source_dir} to {posixpath.join(config.BACKUP_BASE_DIR, device_config.DEVICE_NAME)}")
+        target_dir = posixpath.normpath(posixpath.join(config.BACKUP_BASE_DIR, device_config.BACKUP_DIR))
+        print(f"Pulling from {posixpath.join(root, source_dir)} to {target_dir}")
         adbsync.pull(
             adb_path=adb_path,
             serial=serial,
             root=root,
             source_dir=source_dir,
             exclude_file=config.DEFAULT_EXCLUDE_FILE,
-            target_dir=posixpath.join(config.BACKUP_BASE_DIR, device_config.DEVICE_NAME),
+            target_dir=target_dir,
             old_backup_dir=None
         )
 
@@ -87,7 +88,7 @@ def find_adb_path() -> str:
             adb_path = os.path.join(os.environ['ANDROID_HOME'], 'platform-tools', 'adb')
             if os.path.exists(adb_path):
                 return adb_path
-    
+
     return ''
 
 
