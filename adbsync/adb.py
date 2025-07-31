@@ -5,6 +5,8 @@ import shlex
 import subprocess
 import typing
 
+from datetime import datetime
+
 import pathspec
 
 DirScanResultType = typing.Tuple[typing.Dict[str, int], typing.Dict[str, typing.Tuple[int, float]]]
@@ -72,9 +74,10 @@ class ADB():
         return self.run(['shell'] + [cmd])
 
     def pull(self, root, source_dir, target_dir, old_backup_dir, exclude_file):
-        print(f'Pulling {source_dir}...')
         filter = load_exclude_file(exclude_file)
         remote_dirs, remote_files = self.scan_remote_dir(root, source_dir, filter)
+        if old_backup_dir:
+            self.local_sync(old_backup_dir, remote_dirs, remote_files, target_dir, source_dir, filter)
         local_dirs, local_files = scan_local_dir(target_dir, source_dir, filter)
         pull_files = self.get_pull_files(remote_files, local_files)
         # self.pull_dir(root, source_dir, target_dir, old_backup_dir, filter)
@@ -102,10 +105,15 @@ class ADB():
         result = {}
         for line in output.splitlines():
             parts = line.strip().split(" ", 1)
-            if len(parts) < 2:
-                # Exclude the source_dir itself
+            try:
+                mtime = float(parts[0])
+            except:
+                # Skip abnormal path such as '.\n=UnchNGa'
                 continue
-            mtime = float(parts[0])
+            if len(parts) == 1:
+                # The source_dir itself
+                result[source_dir] = mtime
+                continue
             path = parts[1]
             if not filter.match_file(path):
                 result[posixpath.join(source_dir, path)] = mtime
@@ -123,6 +131,34 @@ class ADB():
             if not filter.match_file(path):
                 result[posixpath.join(source_dir, path)] = (size, mtime)
         return result
+
+    def local_sync(self, old_backup_dir, remote_dirs, remote_files, target_dir, source_dir, filter):
+        """Sync file from old backup."""
+        if not os.path.isdir(old_backup_dir):
+            return
+        if posixpath.realpath(old_backup_dir) == posixpath.realpath(target_dir):
+            return
+        print(f'Sync {old_backup_dir} to {target_dir}')
+        old_dirs, old_files = scan_local_dir(old_backup_dir, source_dir, filter)
+        for file, (size, mtime) in remote_files.items():
+            old = old_files.get(file)
+            if not old:
+                continue
+            old_size, old_mtime = old
+            if old_size != size or abs(mtime - old_mtime) > 2:
+                continue
+            target_file = os.path.join(target_dir, file)
+            if os.path.exists(target_file):
+                stat = os.stat(target_file)
+                if old_size == stat.st_size and abs(old_mtime - stat.st_mtime) < 2:
+                    continue
+            print(f'Linking {file}')
+            target_file_dir = os.path.dirname(target_file)
+            if not os.path.exists(target_file_dir):
+                os.makedirs(target_file_dir, exist_ok=True)
+                timestamp = remote_dirs[posixpath.dirname(file)]
+                os.utime(target_file_dir, (timestamp, timestamp))
+            os.link(os.path.join(old_backup_dir, file), target_file)
 
     def get_pull_files(self, remote_files, local_files):
         result = []
