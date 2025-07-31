@@ -1,5 +1,6 @@
 import itertools
 import os
+import posixpath
 import shlex
 import subprocess
 import typing
@@ -81,12 +82,12 @@ class ADB():
 
     def scan_remote_dir(self, root, source_dir, filter):
         # TODO: call find only once
-        find_cmd = ['find', os.path.join(root, source_dir), '-type', 'f', '-printf', '%s %T@ %P\n']
+        find_cmd = ['find', posixpath.join(root, source_dir), '-type', 'f', '-printf', '%s %T@ %P\n']
         cmd = ['shell', " ".join(shlex.quote(a) for a in find_cmd)]
         output = self.check_output(cmd)
         files = self.parse_find_file_outout(root, source_dir, output, filter)
 
-        find_cmd = ['find', os.path.join(root, source_dir), '-type', 'd', '-printf', '%T@ %P\n']
+        find_cmd = ['find', posixpath.join(root, source_dir), '-type', 'd', '-printf', '%T@ %P\n']
         cmd = ['shell', " ".join(shlex.quote(a) for a in find_cmd)]
         output = self.check_output(cmd)
         dirs = self.parse_find_dir_output(root, source_dir, output, filter)
@@ -107,7 +108,7 @@ class ADB():
             mtime = float(parts[0])
             path = parts[1]
             if not filter.match_file(path):
-                result[os.path.join(source_dir, path)] = mtime
+                result[posixpath.join(source_dir, path)] = mtime
         return result
 
     def parse_find_file_outout(self, root, source_dir, output, filter):
@@ -120,7 +121,7 @@ class ADB():
             mtime = float(parts[1])
             path = parts[2]
             if not filter.match_file(path):
-                result[os.path.join(source_dir, path)] = (size, mtime)
+                result[posixpath.join(source_dir, path)] = (size, mtime)
         return result
 
     def get_pull_files(self, remote_files, local_files):
@@ -146,13 +147,13 @@ class ADB():
         dest_dir = os.path.dirname(os.path.join(target_dir, source_dir))
         if not os.path.exists(dest_dir):
             os.makedirs(dest_dir)
-        cmd = ['pull', '-a', os.path.join(root, source_dir), dest_dir]
+        cmd = ['pull', '-a', posixpath.join(root, source_dir), dest_dir]
         self.run(cmd)
         self.remove_excluded(target_dir, source_dir, filter)
 
     def pull_files(self, root, files, target_dir):
         for f in files:
-            ff = os.path.join(root, f)
+            ff = posixpath.join(root, f)
             dest_dir = os.path.join(target_dir, os.path.dirname(f))
             if not os.path.exists(dest_dir):
                 os.makedirs(dest_dir)

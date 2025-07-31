@@ -2,6 +2,7 @@ import argparse
 import importlib.util
 from importlib.machinery import SourceFileLoader
 import os
+import posixpath 
 import subprocess
 import types
 import typing
@@ -20,6 +21,8 @@ def main():
     if not adb_path:
         print("ADB_PATH not found in configuration or environment.")
         return
+    
+    print(f"Using adb path: {adb_path}")
 
     serial = find_device_serial(adb_path)
     if not serial:
@@ -39,13 +42,14 @@ def main():
     print(f"Loaded device configuration: {device_config.DEVICE_NAME}")
 
     for root, source_dir in device_config.INCLUDE_DIRS:
+        print(f"Pulling from {root}/{source_dir} to {posixpath.join(config.BACKUP_BASE_DIR, device_config.DEVICE_NAME)}")
         adbsync.pull(
             adb_path=adb_path,
             serial=serial,
             root=root,
             source_dir=source_dir,
             exclude_file=config.DEFAULT_EXCLUDE_FILE,
-            target_dir=os.path.join(config.BACKUP_BASE_DIR, device_config.DEVICE_NAME),
+            target_dir=posixpath.join(config.BACKUP_BASE_DIR, device_config.DEVICE_NAME),
             old_backup_dir=None
         )
 
@@ -67,8 +71,24 @@ def find_adb_path() -> str:
     Find the adb executable path.
     This function should be implemented to locate the adb executable.
     """
-    adb_path = 'adb'  # Default to 'adb' if not specified
-    return adb_path
+    if os.name == 'nt':
+        if subprocess.call(['where', 'adb'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
+            adb_path = subprocess.check_output(['where', 'adb']).decode('utf-8').strip().splitlines()[0]
+            return adb_path
+        if os.environ.get('ANDROID_HOME'):
+            adb_path = os.path.join(os.environ['ANDROID_HOME'], 'platform-tools', 'adb.exe')
+            if os.path.exists(adb_path):
+                return adb_path
+    else:  # Assuming a Unix-like system
+        if subprocess.call(['which', 'adb'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
+            adb_path = subprocess.check_output(['which', 'adb']).decode('utf-8').strip()
+            return adb_path
+        if os.environ.get('ANDROID_HOME'):
+            adb_path = os.path.join(os.environ['ANDROID_HOME'], 'platform-tools', 'adb')
+            if os.path.exists(adb_path):
+                return adb_path
+    
+    return ''
 
 
 def find_device_serial(adb: str) -> str:
