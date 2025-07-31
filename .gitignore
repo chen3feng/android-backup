@@ -1,4 +1,7 @@
 /backups
+/devices
+
+!/devices/example.conf
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
