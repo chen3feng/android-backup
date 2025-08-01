@@ -61,7 +61,13 @@ def pull_device(adb_path, serial, config, device_config):
         old_backup_dir = None
 
     print(f'Pulling to {backup_dir}')
-    for root, source_dir in device_config.INCLUDE_DIRS:
+    for include_dir in device_config.INCLUDE_DIRS:
+        parts = include_dir.split('/./')
+        if len(parts) < 2:
+            print(f"[ERROR] Invalid include directory format: {include_dir}, skipping.")
+            continue
+        root = parts[0]
+        source_dir = parts[1]
         print(f"Pulling {posixpath.join(root, source_dir)}...")
         adbsync.pull(
             adb_path=adb_path,

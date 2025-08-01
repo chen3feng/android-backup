@@ -76,7 +76,11 @@ class ADB():
 
     def pull(self, root, source_dir, target_dir, old_backup_dir, exclude_file):
         filter = load_exclude_file(exclude_file)
-        remote_dirs, remote_files = self.scan_remote_dir(root, source_dir, filter)
+        try:
+            remote_dirs, remote_files = self.scan_remote_dir(root, source_dir, filter)
+        except subprocess.CalledProcessError:
+            print(f"Failed to scan remote directory {source_dir}")
+            return
         if old_backup_dir:
             self.local_sync(old_backup_dir, remote_dirs, remote_files, target_dir, source_dir, filter)
         local_dirs, local_files = scan_local_dir(target_dir, source_dir, filter)
@@ -189,7 +193,28 @@ class ADB():
         return result
 
     def remove_excluded(self, root, source_dir, filter: pathspec.PathSpec) -> int:
-        pass
+        """Remove files and directories that match the filter."""
+        if not os.path.isdir(root):
+            return 0
+        if not source_dir:
+            source_dir = ""
+        full_path = posixpath.join(root, source_dir)
+        for dirpath, dirnames, filenames in os.walk(full_path, topdown=False):
+            # Remove files that match the filter
+            for name in filenames:
+                rel_path = posixpath.relpath(posixpath.join(dirpath, name), full_path)
+                if filter.match_file(rel_path):
+                    file_path = posixpath.join(dirpath, name)
+                    print(f"Removing file: {file_path}")
+                    os.remove(file_path)
+            # Remove directories that match the filter
+            for name in dirnames:
+                rel_path = posixpath.relpath(posixpath.join(dirpath, name), full_path)
+                if filter.match_file(rel_path):
+                    dir_path = posixpath.join(dirpath, name)
+                    print(f"Removing directory: {dir_path}")
+                    shutil.rmtree(dir_path, ignore_errors=True)
+        return 0
 
     def pull_dir(self, root, source_dir, target_dir, old_backup_dir, filter):
         # Construct the pull command
