@@ -2,6 +2,7 @@ import itertools
 import os
 import posixpath
 import shlex
+import shutil
 import subprocess
 import typing
 
@@ -140,6 +141,7 @@ class ADB():
             return
         print(f'Sync {old_backup_dir} to {target_dir}')
         old_dirs, old_files = scan_local_dir(old_backup_dir, source_dir, filter)
+        support_hardlink = None
         for file, (size, mtime) in remote_files.items():
             old = old_files.get(file)
             if not old:
@@ -152,13 +154,27 @@ class ADB():
                 stat = os.stat(target_file)
                 if old_size == stat.st_size and abs(old_mtime - stat.st_mtime) < 2:
                     continue
-            print(f'Linking {file}')
+            # print(f'Linking {file}')
             target_file_dir = os.path.dirname(target_file)
             if not os.path.exists(target_file_dir):
                 os.makedirs(target_file_dir, exist_ok=True)
                 timestamp = remote_dirs[posixpath.dirname(file)]
                 os.utime(target_file_dir, (timestamp, timestamp))
-            os.link(os.path.join(old_backup_dir, file), target_file)
+
+            old_file = os.path.join(old_backup_dir, file)
+            new_file = os.path.join(target_dir, file)
+            if support_hardlink is not None:
+                if support_hardlink:
+                    os.link(old_file, new_file)
+                else:
+                    shutil.copy2(old_file, new_file)
+            else:
+                try:
+                    os.link(os.path.join(old_file), new_file)
+                except OSError:
+                    print(f"[WARNING] Backup filesystem doesn't support hard link, use copy instead.")
+                    shutil.copy2(old_file, new_file)
+                    support_hardlink = False
 
     def get_pull_files(self, remote_files, local_files):
         result = []
