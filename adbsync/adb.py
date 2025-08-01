@@ -190,7 +190,7 @@ class ADB():
     def pull_files(self, root, files, target_dir):
         for f in files:
             ff = posixpath.join(root, f)
-            dest_dir = os.path.join(target_dir, os.path.dirname(f))
+            dest_dir = posixpath.join(target_dir, posixpath.dirname(f))
             if not os.path.exists(dest_dir):
                 os.makedirs(dest_dir)
             cmd = ['pull', '-a', ff, dest_dir]

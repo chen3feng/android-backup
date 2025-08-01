@@ -3,6 +3,7 @@ import importlib.util
 import os
 import posixpath
 import subprocess
+import sys
 import types
 import typing
 
@@ -54,7 +55,7 @@ def pull_device(adb_path, serial, config, device_config):
         version_dir = datetime.now().strftime("%Y-%m-%d")
         backup_dir = posixpath.join(device_backup_dir, version_dir)
         os.makedirs(backup_dir, exist_ok=True)
-        old_backup_dir = get_last_backup_dir(device_backup_dir)
+        latest_link_file, old_backup_dir = get_last_backup_dir(device_backup_dir)
     else:
         backup_dir = device_backup_dir
         old_backup_dir = None
@@ -72,26 +73,71 @@ def pull_device(adb_path, serial, config, device_config):
             old_backup_dir=old_backup_dir
         )
     if multiple_versions:
-        update_latest(old_backup_dir, version_dir)
+        if update_latest(latest_link_file, version_dir):
+            print(f"Updated latest link to {version_dir}")
+        else:
+            print(f"Failed to update latest link to {version_dir}")
 
 
-def get_last_backup_dir(device_backup_dir):
-    return posixpath.join(device_backup_dir, 'latest')
+def get_last_backup_dir(device_backup_dir) -> typing.Tuple[str, typing.Optional[str]]:
+    """
+    Get the last backup directory from the latest symlink or file.
+    If the symlink or file does not exist, return None.
+    """
+    latest_link_file = posixpath.join(device_backup_dir, 'latest')
+    if os.path.exists(latest_link_file):
+        if os.path.islink(latest_link_file):
+            old_backup_dir = os.readlink(latest_link_file)
+            if not os.path.isabs(old_backup_dir):
+                old_backup_dir = posixpath.join(device_backup_dir, old_backup_dir)
+            return latest_link_file, old_backup_dir
+        with open(latest_link_file, 'r') as f:
+            old_backup_dir = f.read().strip()
+        if not os.path.isabs(old_backup_dir):
+            old_backup_dir = posixpath.join(device_backup_dir, old_backup_dir)
+        return latest_link_file, old_backup_dir
+    return latest_link_file, None
 
 
-def update_latest(old_backup_dir, version_dir):
+def update_latest(link_file, version_dir) -> bool:
+    """
+    Update the latest symlink or file to point to the new version directory.
+    """
+    if os.path.exists(link_file):
+        if os.path.islink(link_file):
+            return update_link(link_file, version_dir)
+        else:
+            return create_link_file(link_file, version_dir)
+    else:
+        if not update_link(link_file, version_dir):
+            return create_link_file(link_file, version_dir)
+    return False
+
+
+def create_link_file(link_file, version_dir) -> bool:
     try:
-        if os.readlink(old_backup_dir) == version_dir:
-            return
-        if os.path.islink(old_backup_dir) or os.path.exists(old_backup_dir):
-            os.remove(old_backup_dir)
-        os.symlink(version_dir, old_backup_dir,
-                   target_is_directory=True)
-        print(f"Update latest -> {version_dir}")
+        with open(link_file, 'w') as f:
+            f.write(version_dir)
+            return True
+    except OSError as e:
+        print(f"[ERROR] Failed to create link file: {e}")
+    return False
+
+
+def update_link(link_file, version_dir) -> bool:
+    try:
+        if os.readlink(link_file) == version_dir:
+            return True
+        if os.path.islink(link_file) or os.path.exists(link_file):
+            os.remove(link_file)
+        os.symlink(version_dir, link_file,
+                   target_is_directory=False)
+        return True
     except OSError as e:
         print(f"[ERROR] Failed to update symlink: {e}")
         if sys.platform.startswith("win"):
             print("提示：Windows 上创建符号链接需要管理员权限或开启开发者模式")
+    return False
 
 
 def load_config(config_file)-> typing.Optional[types.ModuleType]:
