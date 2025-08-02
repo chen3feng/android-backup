@@ -62,7 +62,6 @@ class ADB():
         return self.run(['shell'] + [cmd])
 
     def pull(self, source_dirs, target_dir, old_backup_dir, exclude_file):
-        print(f'Pulling to {target_dir}')
         filter = load_exclude_file(exclude_file)
         for include_dir in source_dirs:
             parts = include_dir.split('/./')

@@ -14,7 +14,7 @@ import adbsync
 
 
 def main() -> int:
-    config = load_config(os.path.join(os.path.dirname(__file__), 'global.conf'))
+    config = load_config('global', os.path.join(os.path.dirname(__file__), 'global.conf'))
     if not config:
         print("No global configuration found.")
         return 1
@@ -27,28 +27,37 @@ def main() -> int:
 
     print(f"Using adb path: {adb_path}")
 
-    serial = find_device_serial(adb_path)
-    if not serial:
+    serials = find_device_serials(adb_path)
+    if not serials:
         print("No device connected.")
         return 1
 
-    print(f"Find device serial: {serial}")
+    print(f"Find devices: {serials}")
 
-    device_config_path = os.path.join(os.path.dirname(__file__), 'devices', f'{serial}.conf')
-    if not os.path.exists(device_config_path):
-        print(f"No configuration {device_config_path} found.")
-        return 1
-    device_config = load_config(device_config_path)
-    if not device_config:
-        print(f"Failed to load device configuration from {device_config_path}.")
-        return 1
-    print(f"Loaded device configuration: {device_config.DEVICE_NAME}")
+    device_configs = {}
 
-    return pull_device(adb_path, serial, config, device_config)
+    for serial in serials:
+        config_path = os.path.join(os.path.dirname(__file__), 'devices', f'{serial}.conf')
+        if not os.path.exists(config_path):
+            print(f"No configuration {config_path} found.")
+            return 1
+        device_config = load_config(serial, config_path)
+        if not device_config:
+            print(f"Failed to load device configuration from {config_path}.")
+            return 1
+        device_configs[serial] = device_config
+        print(f"Loaded device configuration: {device_config.DEVICE_NAME}")
+
+    ret = 0
+    for serial in serials:
+        if pull_device(adb_path, serial, config, device_configs[serial]) != 0:
+            ret = 1
+    return ret
 
 
 def pull_device(adb_path, serial, config, device_config):
     device_backup_dir = posixpath.normpath(posixpath.join(config.BACKUP_BASE_DIR, device_config.BACKUP_DIR))
+    print(f'Backup device {serial} to {device_backup_dir}')
     multiple_versions = getattr(device_config, 'MULTIPLE_VERSIONS', False)
     if multiple_versions:
         # version_dir = datetime.now().strftime("%Y-%m-%d_%H%M%S")
@@ -139,12 +148,13 @@ def update_link(link_file, version_dir) -> bool:
     return False
 
 
-def load_config(config_file)-> typing.Optional[types.ModuleType]:
+def load_config(name, config_file)-> typing.Optional[types.ModuleType]:
     """
     Load global configuration from a file.
+    The name should be unique otherwise it returns existing one.
     """
     try:
-        config = SourceFileLoader("config_data", config_file).load_module()
+        config = SourceFileLoader(name, config_file).load_module()
         return config
     except Exception as e:
         print(f"Error loading configuration from {config_file}: {e}")
@@ -176,19 +186,20 @@ def find_adb_path() -> str:
     return ''
 
 
-def find_device_serial(adb: str) -> str:
+def find_device_serials(adb: str) -> typing.List[str]:
     """
     Find the device serial number.
     This function should be implemented to retrieve the device serial number.
     """
+    result = []
     try:
         output = subprocess.check_output([adb, 'devices']).decode('utf-8')
         for line in output.splitlines():
             if '\tdevice' in line:
-                return line.split('\t')[0]
+                result.append(line.split('\t')[0])
     except subprocess.CalledProcessError as e:
         print(f"Error finding device serial: {e}")
-    return ''
+    return result
 
 
 if __name__ == '__main__':
