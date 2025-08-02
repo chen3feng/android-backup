@@ -60,24 +60,15 @@ def pull_device(adb_path, serial, config, device_config):
         backup_dir = device_backup_dir
         old_backup_dir = None
 
-    print(f'Pulling to {backup_dir}')
-    for include_dir in device_config.INCLUDE_DIRS:
-        parts = include_dir.split('/./')
-        if len(parts) < 2:
-            print(f"[ERROR] Invalid include directory format: {include_dir}, skipping.")
-            continue
-        root = parts[0]
-        source_dir = parts[1]
-        print(f"Pulling {posixpath.join(root, source_dir)}...")
-        adbsync.pull(
-            adb_path=adb_path,
-            serial=serial,
-            root=root,
-            source_dir=source_dir,
-            exclude_file=config.DEFAULT_EXCLUDE_FILE,
-            target_dir=backup_dir,
-            old_backup_dir=old_backup_dir
-        )
+    adbsync.pull(
+        adb_path=adb_path,
+        serial=serial,
+        source_dirs=device_config.INCLUDE_DIRS,
+        target_dir=backup_dir,
+        old_backup_dir=old_backup_dir,
+        exclude_file=config.DEFAULT_EXCLUDE_FILE,
+    )
+
     if multiple_versions:
         if update_latest(latest_link_file, version_dir):
             print(f"Updated latest link to {version_dir}")

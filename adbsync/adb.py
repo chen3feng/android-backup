@@ -61,8 +61,24 @@ class ADB():
     def shell(self, cmd) -> int:
         return self.run(['shell'] + [cmd])
 
-    def pull(self, root, source_dir, target_dir, old_backup_dir, exclude_file):
+    def pull(self, source_dirs, target_dir, old_backup_dir, exclude_file):
+        print(f'Pulling to {target_dir}')
         filter = load_exclude_file(exclude_file)
+        for include_dir in source_dirs:
+            parts = include_dir.split('/./')
+            if len(parts) < 2:
+                print(f"[ERROR] Invalid include directory format: {include_dir}, skipping.")
+                continue
+            self.pull_one_dir(
+                root=parts[0],
+                source_dir=parts[1],
+                target_dir=target_dir,
+                old_backup_dir=old_backup_dir,
+                filter=filter,
+            )
+
+    def pull_one_dir(self, root, source_dir, target_dir, old_backup_dir, filter):
+        print(f"Pulling {posixpath.join(root, source_dir)}...")
         try:
             remote_dirs, remote_files = self.scan_remote_dir(root, source_dir, filter)
         except subprocess.CalledProcessError:
