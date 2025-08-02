@@ -1,5 +1,6 @@
 import os
 import posixpath
+import shutil
 import typing
 
 import pathspec

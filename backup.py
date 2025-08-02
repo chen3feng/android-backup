@@ -13,38 +13,38 @@ from importlib.machinery import SourceFileLoader
 import adbsync
 
 
-def main():
+def main() -> int:
     config = load_config(os.path.join(os.path.dirname(__file__), 'global.conf'))
     if not config:
         print("No global configuration found.")
-        return
+        return 1
     adb_path = config.ADB_PATH
     if not adb_path:
         adb_path = find_adb_path()
     if not adb_path:
         print("ADB_PATH not found in configuration or environment.")
-        return
+        return 1
 
     print(f"Using adb path: {adb_path}")
 
     serial = find_device_serial(adb_path)
     if not serial:
         print("No device connected.")
-        return
+        return 1
 
     print(f"Find device serial: {serial}")
 
     device_config_path = os.path.join(os.path.dirname(__file__), 'devices', f'{serial}.conf')
     if not os.path.exists(device_config_path):
         print(f"No configuration {device_config_path} found.")
-        return
+        return 1
     device_config = load_config(device_config_path)
     if not device_config:
         print(f"Failed to load device configuration from {device_config_path}.")
-        return
+        return 1
     print(f"Loaded device configuration: {device_config.DEVICE_NAME}")
 
-    pull_device(adb_path, serial, config, device_config)
+    return pull_device(adb_path, serial, config, device_config)
 
 
 def pull_device(adb_path, serial, config, device_config):
@@ -85,6 +85,8 @@ def pull_device(adb_path, serial, config, device_config):
             print(f"Failed to update latest link to {version_dir}")
             if sys.platform.startswith("win"):
                 print("提示：Windows 上创建符号链接需要管理员权限或开启开发者模式")
+
+    return 0
 
 
 def get_last_backup_dir(device_backup_dir) -> typing.Tuple[str, typing.Optional[str]]:
@@ -188,7 +190,6 @@ def find_device_serial(adb: str) -> str:
     Find the device serial number.
     This function should be implemented to retrieve the device serial number.
     """
-    print(f"Finding device serial using adb: {adb}")
     try:
         output = subprocess.check_output([adb, 'devices']).decode('utf-8')
         for line in output.splitlines():
@@ -200,4 +201,4 @@ def find_device_serial(adb: str) -> str:
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
