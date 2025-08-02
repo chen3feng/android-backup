@@ -75,54 +75,49 @@ class ADB():
         self.pull_dirs(root, remote_dirs, target_dir, filter)
         self.pull_files(root, remote_dirs, remote_files, target_dir)
 
-    def scan_remote_dir(self, root, source_dir, filter):
-        # TODO: call find only once
-        find_cmd = ['find', posixpath.join(root, source_dir), '-type', 'f', '-printf', '%s %T@ %P\n']
-        cmd = ['shell', " ".join(shlex.quote(a) for a in find_cmd)]
+    def scan_remote_dir(self, root, source_dir, filter) -> typing.Tuple[dict, dict]:
+        """Scan remote dir, obtain all. its dir and files names and attributes"""
+        find_cmd = f'find "{posixpath.join(root, source_dir)}" \( -type f -or -type d ! -empty \) -printf "%M %s %T@ /%P/\n"'
+        cmd = ['shell', find_cmd]
         output = self.check_output(cmd)
-        files = self.parse_find_file_outout(root, source_dir, output, filter)
-
-        find_cmd = ['find', posixpath.join(root, source_dir), '-type', 'd', '-printf', '%T@ %P\n']
-        cmd = ['shell', " ".join(shlex.quote(a) for a in find_cmd)]
-        output = self.check_output(cmd)
-        dirs = self.parse_find_dir_output(root, source_dir, output, filter)
-
+        dirs, files = self.parse_find_output(root, source_dir, output, filter)
+        self.remove_empty_dirs(dirs, files)
         return dirs, files
+
+    def remove_empty_dirs(self, dirs, files):
+        """Remove all dirs which no file to be sync under them."""
+        non_empty = set()
+        for f in files:
+            d = posixpath.dirname(f)
+            non_empty.add(d)
+            while d:
+                d = posixpath.dirname(d)
+                non_empty.add(d)
+        empty = dirs.keys() - non_empty
+        for d in empty:
+            dirs.pop(d)
 
     def print_files(self, files):
         for path, (size, mtime) in itertools.islice(files.items(), 10):
             print(f"{path}: {size} bytes, modified at {mtime}")
 
-    def parse_find_dir_output(self, root, source_dir, output, filter):
-        result = {}
+    def parse_find_output(self, root, source_dir, output, filter):
+        dirs, files = {}, {}
         for line in output.splitlines():
-            parts = line.strip().split(" ", 1)
-            try:
-                mtime = float(parts[0])
-            except:
-                # Skip abnormal path such as '.\n=UnchNGa'
-                continue
-            if len(parts) == 1:
-                # The source_dir itself
-                result[source_dir] = mtime
-                continue
-            path = parts[1]
-            if not filter.match_file(path):
-                result[posixpath.join(source_dir, path)] = mtime
-        return result
-
-    def parse_find_file_outout(self, root, source_dir, output, filter):
-        result = {}
-        for line in output.splitlines():
-            parts = line.strip().split(" ", 2)
-            if len(parts) < 3:
+            parts = line.strip().split(" ", 3)
+            if len(parts) < 4:
                 raise ValueError(f"Line not in expected format: {line}")
-            size = int(parts[0])
-            mtime = float(parts[1])
-            path = parts[2]
+            mode = parts[0]
+            size = int(parts[1])
+            mtime = float(parts[2])
+            path = parts[3].strip('/')
             if not filter.match_file(path):
-                result[posixpath.join(source_dir, path)] = (size, mtime)
-        return result
+                rel_path = posixpath.join(source_dir, path) if path else source_dir
+                if mode.startswith('d'):
+                    dirs[rel_path] = mtime
+                else:
+                    files[rel_path] = (size, mtime)
+        return dirs, files
 
     def local_sync(self, old_backup_dir, remote_dirs, remote_files, target_dir, source_dir, filter):
         """Sync file from old backup."""
