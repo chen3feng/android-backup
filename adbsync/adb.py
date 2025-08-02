@@ -93,31 +93,26 @@ class ADB():
 
     def scan_remote_dir(self, root, source_dir, filter) -> typing.Tuple[dict, dict]:
         """Scan remote dir, obtain all. its dir and files names and attributes"""
-        find_cmd = f'find "{posixpath.join(root, source_dir)}" \( -type f -or -type d ! -empty \) -printf "%M %s %T@ /%P/\n"'
+        # Use the `find` command to recursively list all files and non-empty directories.
+        # For each entry, print:
+        #   - File mode (%M)
+        #   - Size in bytes (%s)
+        #   - Modification timestamp (%T@)
+        #   - Relative path (%P), enclosed in slashes: /relative/path/
+        #
+        # Wrapping the relative path in slashes makes it easier to:
+        #   - Unambiguously detect blank or whitespace-containing paths
+        #   - Treat the root directory (empty %P) consistently as `//`
+        full_dir = posixpath.join(root, source_dir)
+        find_cmd = f'find "{full_dir}" \( -type f -or -type d ! -empty \) -printf "%M %s %T@ /%P/\n"'
         cmd = ['shell', find_cmd]
         output = self.check_output(cmd)
         dirs, files = self.parse_find_output(root, source_dir, output, filter)
         self.remove_empty_dirs(dirs, files)
         return dirs, files
 
-    def remove_empty_dirs(self, dirs, files):
-        """Remove all dirs which no file to be sync under them."""
-        non_empty = set()
-        for f in files:
-            d = posixpath.dirname(f)
-            non_empty.add(d)
-            while d:
-                d = posixpath.dirname(d)
-                non_empty.add(d)
-        empty = dirs.keys() - non_empty
-        for d in empty:
-            dirs.pop(d)
-
-    def print_files(self, files):
-        for path, (size, mtime) in itertools.islice(files.items(), 10):
-            print(f"{path}: {size} bytes, modified at {mtime}")
-
     def parse_find_output(self, root, source_dir, output, filter):
+        """Parse the output of the `find` command, return all dir and file attributes."""
         dirs, files = {}, {}
         for line in output.splitlines():
             parts = line.strip().split(" ", 3)
@@ -128,7 +123,7 @@ class ADB():
             mode = parts[0]
             size = int(parts[1])
             mtime = float(parts[2])
-            path = parts[3].strip('/')
+            path = parts[3].strip('/') # Remove the enclosing slashes, see `scan_remote_dir`
             if not filter.match_file(path):
                 rel_path = posixpath.join(source_dir, path) if path else source_dir
                 if mode.startswith('d'):
@@ -136,6 +131,20 @@ class ADB():
                 else:
                     files[rel_path] = (size, mtime)
         return dirs, files
+
+    def remove_empty_dirs(self, dirs, files):
+        """Remove all dirs which no file to be synced under them."""
+        non_empty = set()
+        for f in files:
+            # Add the parents to non_empty set
+            d = posixpath.dirname(f)
+            non_empty.add(d)
+            while d:
+                d = posixpath.dirname(d)
+                non_empty.add(d)
+        empty = dirs.keys() - non_empty
+        for d in empty:
+            dirs.pop(d)
 
     def local_sync(self, old_backup_dir, remote_dirs, remote_files, target_dir, source_dir, filter):
         """Sync file from old backup."""
@@ -197,6 +206,7 @@ class ADB():
         return remove_nested_dirs(pull_dirs)
 
     def pull_dir(self, root, source_dir, target_dir, remote_dirs, filter):
+        """Pull a directory from the device."""
         # Construct the pull command
         # Note the use of '-a' to preserve file attributes
         # The target directory is the parent directory of the source_dir to ensure the structure is maintained.
@@ -205,6 +215,7 @@ class ADB():
         local_fs.makedirs(dest_dir, remote_dirs.get(source_dir))
         cmd = ['pull', '-a', posixpath.join(root, source_dir), dest_dir]
         self.run(cmd)
+        # adb pull doesn't support exclude option, remove them from the target_dir.
         local_fs.remove_excluded(target_dir, source_dir, filter)
 
     def pull_files(self, root, remote_dirs, files, target_dir):
