@@ -10,36 +10,7 @@ from datetime import datetime
 
 import pathspec
 
-DirScanResultType = typing.Tuple[typing.Dict[str, int], typing.Dict[str, typing.Tuple[int, float]]]
-
-def scan_local_dir(root: str, subdir: str = "", filter: pathspec.PathSpec = None) -> DirScanResultType:
-    """Scan a local directory and return a tuple of directories and files with their metadata."""
-    dirs, files = {}, {}
-    base = os.path.join(root, subdir)
-    for dirpath, _, filenames in os.walk(base):
-        rel_dirpath = os.path.relpath(dirpath, root).replace("\\", "/")
-        try:
-            if not filter.match_file(rel_dirpath):
-                stat = os.stat(dirpath)
-                dirs[rel_dirpath] = stat.st_mtime
-            # else:
-            #     print(f'Exclude {rel_dirpath}')
-        except FileNotFoundError:
-            # 目录可能在遍历过程中被删除
-            pass
-        for name in filenames:
-            full_path = os.path.join(dirpath, name)
-            rel_path = os.path.relpath(full_path, root).replace("\\", "/")
-            if filter.match_file(rel_path):
-                # print(f'Exclude {rel_path}')
-                continue
-            try:
-                stat = os.stat(full_path)
-                files[rel_path] = (stat.st_size, stat.st_mtime)
-            except FileNotFoundError:
-                # 文件可能在遍历过程中被删除
-                continue
-    return dirs, files
+from . import local_fs
 
 
 def remove_nested_dirs(dirs):
@@ -102,7 +73,7 @@ class ADB():
             self.local_sync(old_backup_dir, remote_dirs, remote_files, target_dir, source_dir, filter)
 
         self.pull_dirs(root, remote_dirs, target_dir, filter)
-        self.pull_files(root, remote_files, target_dir)
+        self.pull_files(root, remote_dirs, remote_files, target_dir)
 
     def scan_remote_dir(self, root, source_dir, filter):
         # TODO: call find only once
@@ -159,9 +130,18 @@ class ADB():
             return
         if posixpath.realpath(old_backup_dir) == posixpath.realpath(target_dir):
             return
-        print(f'Sync {old_backup_dir} to {target_dir}')
+        print(f'Syncing {old_backup_dir} to {target_dir}')
         support_hardlink = None
-        for file, (size, mtime) in remote_files.items():
+        progress_printed = False
+        progress_time = datetime.now()
+        for i, (file, (size, mtime)) in enumerate(remote_files.items()):
+            # Show progress
+            now = datetime.now()
+            if (now - progress_time).total_seconds() > 1:
+                print(f'\rProgress: {i}/{len(remote_files)}', end='', flush=True)
+                progress_printed = True
+                progress_time = now
+
             of_path = os.path.join(old_backup_dir, file)
             if not os.path.exists(of_path):
                 continue
@@ -175,50 +155,15 @@ class ADB():
                     continue
             # print(f'Linking {file}')
             target_file_dir = os.path.dirname(target_file)
-            if not os.path.exists(target_file_dir):
-                os.makedirs(target_file_dir, exist_ok=True)
-                timestamp = remote_dirs[posixpath.dirname(file)]
-                os.utime(target_file_dir, (timestamp, timestamp))
+            local_fs.makedirs(target_file_dir, remote_dirs[posixpath.dirname(file)])
 
             old_file = os.path.join(old_backup_dir, file)
             new_file = os.path.join(target_dir, file)
-            if support_hardlink is not None:
-                if support_hardlink:
-                    os.link(old_file, new_file)
-                else:
-                    shutil.copy2(old_file, new_file)
-            else:
-                try:
-                    os.link(os.path.join(old_file), new_file)
-                except OSError:
-                    print(f"[WARNING] Backup filesystem doesn't support hard link, use copy instead.")
-                    shutil.copy2(old_file, new_file)
-                    support_hardlink = False
+            support_hardlink = local_fs.sync_file(old_file, new_file, support_hardlink)
 
-    def remove_excluded(self, root, source_dir, filter: pathspec.PathSpec) -> int:
-        """Remove files and directories that match the filter."""
-        if not os.path.isdir(root):
-            return 0
-        if not source_dir:
-            source_dir = ""
-        full_path = posixpath.join(root, source_dir)
-        for dirpath, dirnames, filenames in os.walk(full_path, topdown=False):
-            # Remove files that match the filter
-            dirpath = dirpath.replace("\\", "/")
-            for name in filenames:
-                rel_path = posixpath.relpath(posixpath.join(dirpath, name), root)
-                if filter.match_file(rel_path):
-                    file_path = posixpath.join(dirpath, name)
-                    # print(f"Removing file: {file_path}")
-                    os.remove(file_path)
-            # Remove directories that match the filter
-            for name in dirnames:
-                rel_path = posixpath.relpath(posixpath.join(dirpath, name), root)
-                if filter.match_file(rel_path):
-                    dir_path = posixpath.join(dirpath, name)
-                    # print(f"Removing directory: {dir_path}")
-                    shutil.rmtree(dir_path, ignore_errors=True)
-        return 0
+        if progress_printed:
+            print('')
+
 
     def pull_dirs(self, root, remote_dirs, target_dir, filter):
         """Pull directories from the remote device to the target directory."""
@@ -226,7 +171,7 @@ class ADB():
         pull_dirs = self.get_pull_dirs(remote_dirs, target_dir)
         for pull_dir in pull_dirs:
             if not filter.match_file(pull_dir):
-                self.pull_dir(root, pull_dir, target_dir, filter)
+                self.pull_dir(root, pull_dir, target_dir, remote_dirs, filter)
 
     def get_pull_dirs(self, remote_dirs, target_dir):
         """Get the pull command for a directory."""
@@ -238,26 +183,26 @@ class ADB():
                 pull_dirs.append(remote_dir)
         return remove_nested_dirs(pull_dirs)
 
-    def pull_dir(self, root, source_dir, target_dir, filter):
+    def pull_dir(self, root, source_dir, target_dir, remote_dirs, filter):
         # Construct the pull command
         # Note the use of '-a' to preserve file attributes
         # The target directory is the parent directory of the source_dir to ensure the structure is maintained.
         # `adb pull source_dir/ target_dir` way does not work as expected because it creates a new subdirectory in target_dir if the target_dir already exist.
-        dest_dir = os.path.dirname(os.path.join(target_dir, source_dir))
-        if not os.path.exists(dest_dir):
-            os.makedirs(dest_dir)
+        parent_dir = posixpath.dirname(source_dir)
+        dest_dir = os.path.join(target_dir, parent_dir)
+        if parent_dir:
+            local_fs.makedirs(dest_dir, remote_dirs[parent_dir])
         cmd = ['pull', '-a', posixpath.join(root, source_dir), dest_dir]
         self.run(cmd)
-        self.remove_excluded(target_dir, source_dir, filter)
+        local_fs.remove_excluded(target_dir, source_dir, filter)
 
-    def pull_files(self, root, files, target_dir):
+    def pull_files(self, root, remote_dirs, files, target_dir):
         """Pull files from the remote device to the target directory."""
         files = self.get_pull_files(files, target_dir)
         for f in files:
             ff = posixpath.join(root, f)
             dest_dir = posixpath.join(target_dir, posixpath.dirname(f))
-            if not os.path.exists(dest_dir):
-                os.makedirs(dest_dir)
+            local_fs.makedirs(dest_dir, remote_dirs[posixpath.dirname(f)])
             cmd = ['pull', '-a', ff, dest_dir]
             self.run(cmd)
 

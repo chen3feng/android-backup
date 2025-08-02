@@ -83,6 +83,8 @@ def pull_device(adb_path, serial, config, device_config):
             print(f"Updated latest link to {version_dir}")
         else:
             print(f"Failed to update latest link to {version_dir}")
+            if sys.platform.startswith("win"):
+                print("提示：Windows 上创建符号链接需要管理员权限或开启开发者模式")
 
 
 def get_last_backup_dir(device_backup_dir) -> typing.Tuple[str, typing.Optional[str]]:
@@ -140,9 +142,7 @@ def update_link(link_file, version_dir) -> bool:
                    target_is_directory=False)
         return True
     except OSError as e:
-        print(f"[ERROR] Failed to update symlink: {e}")
-        if sys.platform.startswith("win"):
-            print("提示：Windows 上创建符号链接需要管理员权限或开启开发者模式")
+        pass
     return False
 
 
