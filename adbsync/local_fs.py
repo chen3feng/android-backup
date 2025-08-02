@@ -37,11 +37,12 @@ def scan_dir(root: str, subdir: str = "", filter: pathspec.PathSpec = None) -> D
     return dirs, files
 
 
-def makedirs(dirpath: str, timestamp: float) -> None:
+def makedirs(dirpath: str, timestamp: typing.Optional[float]) -> None:
     """Make directories and set the. timestamp."""
     if not os.path.exists(dirpath):
         os.makedirs(dirpath, exist_ok=True)
-        os.utime(dirpath, (timestamp, timestamp))
+        if timestamp is not None:
+            os.utime(dirpath, (timestamp, timestamp))
 
 
 def sync_file(old_file: str, new_file: str, support_hardlink) -> bool:

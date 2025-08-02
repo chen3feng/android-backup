@@ -188,10 +188,8 @@ class ADB():
         # Note the use of '-a' to preserve file attributes
         # The target directory is the parent directory of the source_dir to ensure the structure is maintained.
         # `adb pull source_dir/ target_dir` way does not work as expected because it creates a new subdirectory in target_dir if the target_dir already exist.
-        parent_dir = posixpath.dirname(source_dir)
-        dest_dir = os.path.join(target_dir, parent_dir)
-        if parent_dir:
-            local_fs.makedirs(dest_dir, remote_dirs[parent_dir])
+        dest_dir = os.path.join(target_dir, source_dir)
+        local_fs.makedirs(dest_dir, remote_dirs.get(source_dir))
         cmd = ['pull', '-a', posixpath.join(root, source_dir), dest_dir]
         self.run(cmd)
         local_fs.remove_excluded(target_dir, source_dir, filter)
