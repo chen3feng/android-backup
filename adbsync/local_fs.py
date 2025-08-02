@@ -61,10 +61,10 @@ def sync_file(old_file: str, new_file: str, support_hardlink) -> bool:
     return support_hardlink
 
 
-def remove_excluded(root, source_dir, filter: pathspec.PathSpec) -> int:
+def remove_excluded(root, source_dir, filter: pathspec.PathSpec):
     """Remove files and directories that match the filter."""
     if not os.path.isdir(root):
-        return 0
+        return
     if not source_dir:
         source_dir = ""
     full_path = posixpath.join(root, source_dir)
@@ -84,4 +84,3 @@ def remove_excluded(root, source_dir, filter: pathspec.PathSpec) -> int:
                 dir_path = posixpath.join(dirpath, name)
                 # print(f"Removing directory: {dir_path}")
                 shutil.rmtree(dir_path, ignore_errors=True)
-    return 0
