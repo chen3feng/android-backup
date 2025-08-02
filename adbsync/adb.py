@@ -121,8 +121,10 @@ class ADB():
         dirs, files = {}, {}
         for line in output.splitlines():
             parts = line.strip().split(" ", 3)
-            if len(parts) < 4:
-                raise ValueError(f"Line not in expected format: {line}")
+            if len(parts) != 4:
+                # Some exceptional case, there are '\n' characters in the path
+                print(f'Skip invalid line "{line}"')
+                continue
             mode = parts[0]
             size = int(parts[1])
             mtime = float(parts[2])
