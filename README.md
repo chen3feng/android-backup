@@ -113,7 +113,7 @@ MULTIPLE_VERSIONS = True
 
 ### Wireless Network Backup
 
-Enable wireless debugging on your phone and memorize the IP address and port, such as `172.20.9.21:35768`.
+Enable [wireless debugging](https://developer.android.com/tools/adb?wireless-android11-command-line#connect-to-a-device-over-wi-fi) on your phone and memorize the IP address and port, such as `172.20.9.21:35768`.
 
 Run the `adb connect` command in the directory to connect to the phone:
 
@@ -127,13 +127,13 @@ Other usage is the same as the USB method.
 
 Although this isn't particularly relevant to this program, it's still worth mentioning. After all, I don't think anyone wants to be the next [Edison Chen](https://en.wikipedia.org/wiki/Edison_Chen_photo_scandal).
 
-This program is primarily designed for portable storage devices, and portable hard drives are easily lost.
+This program is primarily designed for portable storage devices, and theys are easily lost.
 
 To prevent information leakage, it's strongly recommended to enable hard drive encryption, such as [BitLocker](https://learn.microsoft.com/en-us/windows/security/operating-system-security/data-protection/bitlocker/) on Windows, [External Hard Drive Encryption](https://support.apple.com/zh-cn/guide/disk-utility/dskutl35612/mac) on Mac, or the universal [VeraCrypt](hhttps://veracrypt.io/en/Downloads.html).
 
 ## Cross-Platform Backup
 
-If you want to use your mobile storage device on both Windows and Mac, currently the only options are the [exFAT](https://learn.microsoft.com/en-us/windows/win32/fileio/exfat-specification) file system or the paid NTFS software on Mac.
+If you want to use your portable storage device on both Windows and Mac, currently the only options are the [exFAT](https://learn.microsoft.com/en-us/windows/win32/fileio/exfat-specification) file system or the paid NTFS software on Mac.
 
 When using exFAT, it is strongly recommended to store sensitive data using VeraCrypt.
 
@@ -144,3 +144,8 @@ Use the adb shell find command to scan the directory to be backed up on the phon
 - For directories that do not exist locally, use `adb pull <remote_directory> <local_directory>` to pull them.
 - For files that already exist locally, compare the timestamps and file sizes. If they differ, use adb pull to pull them locally.
 - For multi-version backups, first check whether the file with the same path already exists in the old backup, and check if the size and timestamp match. If so, create a hard link to the target backup directory.
+
+## Related Projects
+
+- [google/adb-sync](https://github.com/google/adb-sync) has been archived.
+- [better-adb-sync](https://github.com/jb2170/better-adb-sync) has not been updated for two years.
