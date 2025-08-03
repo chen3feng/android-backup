@@ -17,7 +17,7 @@
 
 ### 安装
 
-- 下载并安装 [android-platform-tools](https://developer.android.com/tools/releases/platform-tools?hl=zh-cn)
+- 安装 [android-platform-tools](https://developer.android.com/tools/releases/platform-tools?hl=zh-cn)，下载安装或者通过包管理工具比如 home brew 来安装都可以。
 - 安装 [Python](https://www.python.org/)，程序员都会。
 - 安装 pathspec：`pip install pathspec`
 - 手机开启 [USB 调试](https://developer.android.com/studio/debug/dev-options?hl=zh-cn)
@@ -69,6 +69,31 @@ Mac/Linux 系统：
 ```
 
 执行命令后即会自动执行备份。
+
+输出示例：
+
+```console
+Using adb path: /usr/local/bin/adb
+Find devices:
+  serial=7654321 name="Xiaomi 12"
+Loaded device configuration: Xiaomi 12
+Backup device Xiaomi 12 to backups/xiaomi12
+Pulling /sdcard/DCIM...
+/sdcard/DCIM/Camera/IMG_20250803_145317.jpg: 1 file pulled, 0 skipped. 26.3 MB/s (842953 bytes in 0.031s)
+/sdcard/DCIM/Camera/IMG_20250803_141647.jpg: 1 file pulled, 0 skipped. 30.4 MB/s (937803 bytes in 0.029s)
+/sdcard/DCIM/Camera/IMG_20250803_144114.jpg: 1 file pulled, 0 skipped. 34.0 MB/s (3944176 bytes in 0.111s)
+/sdcard/DCIM/Camera/IMG_20250803_144732.jpg: 1 file pulled, 0 skipped. 30.1 MB/s (992072 bytes in 0.031s)
+/sdcard/DCIM/Camera/IMG_20250803_145240.jpg: 1 file pulled, 0 skipped. 28.5 MB/s (798837 bytes in 0.027s)
+/sdcard/DCIM/Camera/IMG_20250803_145619.jpg: 1 file pulled, 0 skipped. 26.9 MB/s (653076 bytes in 0.023s)
+/sdcard/DCIM/Camera/IMG_20250803_145051.jpg: 1 file pulled, 0 skipped. 25.4 MB/s (544515 bytes in 0.020s)
+/sdcard/DCIM/Camera/IMG_20250803_144829.jpg: 1 file pulled, 0 skipped. 28.2 MB/s (673078 bytes in 0.023s)
+Pulling /sdcard/Documents...
+Pulling /sdcard/Download...
+Pulling /sdcard/Movies...
+Pulling /sdcard/Music...
+Pulling /sdcard/Pictures...
+Updated latest link to 2025-08-03
+```
 
 ### 多版本备份
 
