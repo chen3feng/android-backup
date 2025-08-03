@@ -30,7 +30,7 @@ def remove_nested_dirs(dirs):
 
 def load_exclude_file(exclude_file: str) -> pathspec.PathSpec:
     if not exclude_file:
-        return pathspec.PathSpec()
+        return pathspec.PathSpec([])
     with open(exclude_file, 'r') as fh:
         spec = pathspec.PathSpec.from_lines('gitwildmatch', fh)
         return spec
@@ -208,11 +208,12 @@ class ADB():
         """Pull a directory from the device."""
         # Construct the pull command
         # Note the use of '-a' to preserve file attributes
+        # Add a slash after the source dir to pull the whole directory.
         # The target directory is the parent directory of the source_dir to ensure the structure is maintained.
-        # `adb pull source_dir/ target_dir` way does not work as expected because it creates a new subdirectory in target_dir if the target_dir already exist.
-        dest_dir = os.path.join(target_dir, source_dir)
-        local_fs.makedirs(dest_dir, remote_dirs.get(source_dir))
-        cmd = ['pull', '-a', posixpath.join(root, source_dir), dest_dir]
+        parent_dir = posixpath.dirname(source_dir)
+        dest_dir = posixpath.join(target_dir, parent_dir)
+        local_fs.makedirs(dest_dir, remote_dirs.get(parent_dir))
+        cmd = ['pull', '-a', posixpath.join(root, source_dir) + '/', dest_dir]
         self.run(cmd)
         # adb pull doesn't support exclude option, remove them from the target_dir.
         local_fs.remove_excluded(target_dir, source_dir, filter)
@@ -222,8 +223,9 @@ class ADB():
         files = self.get_pull_files(files, target_dir)
         for f in files:
             ff = posixpath.join(root, f)
-            dest_dir = posixpath.join(target_dir, posixpath.dirname(f))
-            local_fs.makedirs(dest_dir, remote_dirs[posixpath.dirname(f)])
+            parent_dir = posixpath.dirname(f)
+            dest_dir = posixpath.join(target_dir, parent_dir)
+            local_fs.makedirs(dest_dir, remote_dirs[parent_dir])
             cmd = ['pull', '-a', ff, dest_dir]
             self.run(cmd)
 

@@ -165,11 +165,27 @@ I did some research and found that transferring files via ADB is still the faste
 
 ## How It Works
 
-Use the adb shell find command to scan the directory to be backed up on the phone, obtain a list of basic directory and file information, and compare it with the files in the local target directory:
+This program is implemented in two layers:
 
-- For directories that do not exist locally, use `adb pull <remote_directory> <local_directory>` to pull them.
-- For files that already exist locally, compare the timestamps and file sizes. If they differ, use adb pull to pull them locally.
-- For multi-version backups, first check whether the file with the same path already exists in the old backup, and check if the size and timestamp match. If so, create a hard link to the target backup directory.
+The `adbsync` package implements the core synchronization functionality, providing synchronization functions similar to `rsync`. It can also be called directly from the command line using `python -m adbsync`:
+
+```console
+python -m adbsync /sdcard/./Documents backups/xiaomi9/
+```
+
+Run `python -m adbsync --help` for a complete description of the command line parameters.
+
+The `backup` command provides a directory line user interface, responsible for identifying the currently connected device, loading the corresponding configuration file, checking the backup directory, and generating the appropriate parameters to call the `adbsync.pull` function.
+
+The process of incremental pull:
+
+- Use the `adb shell find` command to scan the directory to be backed up on the phone, obtain a list of
+  basic directory and file information, and compare it with the files in the local target directory.
+- For directories that do not exist locally, use `adb pull <remote_directory> <local_directory>` to pull them directly.
+- For existing files, compare the timestamps and file sizes. If they differ, use adb pull to pull them locally.
+- For multi-version backups, first check whether the file with the same path already exists in the old backup,
+  and see if the size and timestamp match. If so, hard link it to the target backup directory.
+  If it doesn't match or doesn't exist, download it from the device.
 
 ## Related Projects
 
