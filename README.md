@@ -121,9 +121,11 @@ MULTIPLE_VERSIONS = True
 
 ### Wireless Network Backup
 
-Enable [wireless debugging](https://developer.android.com/tools/adb?wireless-android11-command-line#connect-to-a-device-over-wi-fi) on your phone and memorize the IP address and port, such as `172.20.9.21:35768`.
+Make sure your phone and computer are connected to the same WiFi.
+Enable [wireless debugging](https://developer.android.com/tools/adb?wireless-android11-command-line#connect-to-a-device-over-wi-fi) on your phone,
+you can see the IP address and port, such as `172.20.10.8:39915`.
 
-Run the `adb connect` command in the directory to connect to the phone:
+Run the `adb connect` command to connect to the phone:
 
 ```console
 adb connect 172.20.9.21:35768
@@ -144,6 +146,22 @@ To prevent information leakage, it's strongly recommended to enable hard drive e
 If you want to use your portable storage device on both Windows and Mac, currently the only options are the [exFAT](https://learn.microsoft.com/en-us/windows/win32/fileio/exfat-specification) file system or the paid NTFS software on Mac.
 
 When using exFAT, it is strongly recommended to store sensitive data using VeraCrypt.
+
+## Background
+
+I've never paid for cloud services. Partly because I find the monthly fees annoying, and partly because I don't trust these vendors.
+
+So, I've always manually backed up my phone's files to a local storage device using my computer. I've also looked for software, but some require rooting your phone, and some have limited free features.
+
+Copying files via the MTP protocol is very slow and unstable. It frequently drops the connection, doesn't support update mode, and makes it difficult to determine which files need updating. I've had to copy everything at once, which takes a long time.
+
+I've also tried FTP, but it's not very fast either. Some software can display your phone like an external hard drive.
+
+Furthermore, all of these protocols and software require manual file selection for synchronization.
+
+After careful consideration, I realized I needed a tool like [rsync](https://download.samba.org/pub/rsync/rsync.1) that allows incremental transfers and customizable file filtering rules.
+
+I did some research and found that transferring files via ADB is still the fastest, but ADB doesn't support incremental transfers. I found two similar tools, google/adb-sync, which is deprecated and better-adb-sync, which has very few features. Neither of them met my needs, so I developed this software.
 
 ## How It Works
 
