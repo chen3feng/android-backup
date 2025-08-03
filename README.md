@@ -2,6 +2,8 @@
 
 English | [简体中文](README-zh.md)
 
+Automatically and incrementally back up files, photos, and more from your Android device to your computer's hard drive, USB flash drive, or external hard drive via a USB cable or wireless network.
+
 ## Features
 
 - Automatically pull files from your phone to a local backup directory
@@ -100,6 +102,7 @@ Updated latest link to 2025-08-03
 The default is single-version backup, which means that each backup refreshes the files in the backup directory, replacing any files that have changed.
 
 Multi-version backup means that each backup creates a new backup directory named in the date format, such as `2025-08-03`. This leaves the previous backup directory, such as `2025-07-31`, unaffected. On file systems that support [hard links](https://en.wikipedia.org/wiki/Hard_link) (NTFS on Windows, the default file systems on Linux and Mac), this can significantly save hard disk storage space.
+
 On file systems that don't support hard links, such as FAT32 and exFAT, multi-version backups are performed by copying, which is much slower. The storage space occupied by each version cannot be shared, so it's not advisable to retain too many historical versions.
 
 Enable this feature in the device's configuration file:
