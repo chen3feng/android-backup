@@ -4,11 +4,19 @@ English | [简体中文](README-zh.md)
 
 Automatically and incrementally back up files, photos, and more from your Android device to your computer's hard drive, USB flash drive, or external hard drive via a USB cable or wireless network.
 
+Advantages:
+
+- Saves money on cloud storage
+- Fast, much faster than [MTP](https://en.wikipedia.org/wiki/Media_Transfer_Protocol#Performance)
+- Only one setup required for new devices, with subsequent operations automatic
+- No root required
+- Open source and free
+
 ## Features
 
 - Automatically pull files from your phone to a local backup directory
 - Configurable list of directories to pull
-- Incremental backup, only pulls new and changed files, typically completes in 3 minutes
+- Incremental backup, only pulls new and changed files, typically completes in 1 minutes if there are only a few changed files.
 - Supports multi-version backups, backing up a new snapshot to a new directory each time, and only increasing the storage space used by the changes
 - Backs up multiple connected phones at once
 - Supports wireless backup over the network
