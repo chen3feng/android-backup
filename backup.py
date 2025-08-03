@@ -53,7 +53,7 @@ def main() -> int:
             print(f"Failed to load device configuration from {config_path}.")
             return 1
         device_configs[device.serial] = device_config
-        print(f"Loaded device configuration: {device_config.DEVICE_NAME}")
+        print(f"Loaded device configuration: {device.name}")
 
     ret = 0
     for device in devices:
