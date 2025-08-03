@@ -1,7 +1,9 @@
 import argparse
+import collections
 import importlib.util
 import os
 import posixpath
+import re
 import subprocess
 import sys
 import types
@@ -27,37 +29,42 @@ def main() -> int:
 
     print(f"Using adb path: {adb_path}")
 
-    serials = find_device_serials(adb_path)
-    if not serials:
+    devices = find_devices(adb_path)
+    if not devices:
         print("No device connected.")
         return 1
 
-    print(f"Find devices: {serials}")
+    print(f"Find devices:")
+    for device in devices:
+        if device.address == device.serial:
+            print(f'  serial={device.serial} name="{device.name}"')
+        else:
+            print(f'  serial={device.serial} name="{device.name}" address={device.address}')
 
     device_configs = {}
 
-    for serial in serials:
-        config_path = os.path.join(os.path.dirname(__file__), 'devices', f'{serial}.conf')
+    for device in devices:
+        config_path = os.path.join(os.path.dirname(__file__), 'devices', f'{device.serial}.conf')
         if not os.path.exists(config_path):
             print(f"No configuration {config_path} found.")
             return 1
-        device_config = load_config(serial, config_path)
+        device_config = load_config(device.serial, config_path)
         if not device_config:
             print(f"Failed to load device configuration from {config_path}.")
             return 1
-        device_configs[serial] = device_config
+        device_configs[device.serial] = device_config
         print(f"Loaded device configuration: {device_config.DEVICE_NAME}")
 
     ret = 0
-    for serial in serials:
-        if pull_device(adb_path, serial, config, device_configs[serial]) != 0:
+    for device in devices:
+        if pull_device(adb_path, device, config, device_configs[device.serial]) != 0:
             ret = 1
     return ret
 
 
-def pull_device(adb_path, serial, config, device_config):
+def pull_device(adb_path, device, config, device_config):
     device_backup_dir = posixpath.normpath(posixpath.join(config.BACKUP_BASE_DIR, device_config.BACKUP_DIR))
-    print(f'Backup device {serial} to {device_backup_dir}')
+    print(f'Backup device {device.name} to {device_backup_dir}')
     multiple_versions = getattr(device_config, 'MULTIPLE_VERSIONS', False)
     if multiple_versions:
         # version_dir = datetime.now().strftime("%Y-%m-%d_%H%M%S")
@@ -71,7 +78,7 @@ def pull_device(adb_path, serial, config, device_config):
 
     adbsync.pull(
         adb_path=adb_path,
-        serial=serial,
+        address=device.address,
         source_dirs=device_config.INCLUDE_DIRS,
         target_dir=backup_dir,
         old_backup_dir=old_backup_dir,
@@ -186,20 +193,51 @@ def find_adb_path() -> str:
     return ''
 
 
-def find_device_serials(adb: str) -> typing.List[str]:
+Device = collections.namedtuple('Device', ['address', 'serial', 'name'])
+
+def find_devices(adb: str) -> typing.List[Device]:
     """
-    Find the device serial number.
-    This function should be implemented to retrieve the device serial number.
+    Find the device_id and serial number.
+    When ABD is connected wireless, the device_id is IP:Port, otherwise it is serial
     """
     result = []
     try:
-        output = subprocess.check_output([adb, 'devices']).decode('utf-8')
+        output = subprocess.check_output([adb, 'devices'], text=True)
         for line in output.splitlines():
             if '\tdevice' in line:
-                result.append(line.split('\t')[0])
+                address = line.split('\t')[0]
+                serial = get_device_serial(adb, address)
+                name = get_device_name(adb, address)
+                result.append(Device(address, serial, name))
     except subprocess.CalledProcessError as e:
-        print(f"Error finding device serial: {e}")
+        print(f"Error finding device information: {e}")
     return result
+
+
+def get_device_serial(adb, address):
+    if not is_ip_port(address):
+        return address
+    cmd = [adb, '-s', address, 'shell', 'getprop ro.boot.serialno']
+    return subprocess.check_output(cmd, text=True).strip()
+
+
+def get_device_name(adb, address):
+    cmds = [
+        'settings get secure bluetooth_name',
+        'getprop persist.sys.device_name',
+        'settings get global device_name',
+        # 'getprop ro.product.marketname',
+        # 'getprop ro.product.odm.marketname',
+        # 'getprop ro.product.vendor.marketname',
+    ]
+    for cmd in cmds:
+        full_cmd = [adb, '-s', address, 'shell', cmd]
+        output = subprocess.check_output(full_cmd, text=True).strip()
+        if output and output != 'null':
+            return output
+
+def is_ip_port(address: str) -> bool:
+    return re.match(r'^\d+\.\d+\.\d+\.\d+:\d+$', address) is not None
 
 
 if __name__ == '__main__':
