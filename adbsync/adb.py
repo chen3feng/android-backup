@@ -221,12 +221,14 @@ class ADB():
     def pull_files(self, root, remote_dirs, files, target_dir):
         """Pull files from the remote device to the target directory."""
         files = self.get_pull_files(files, target_dir)
-        for f in files:
-            ff = posixpath.join(root, f)
-            parent_dir = posixpath.dirname(f)
-            dest_dir = posixpath.join(target_dir, parent_dir)
-            local_fs.makedirs(dest_dir, remote_dirs[parent_dir])
-            cmd = ['pull', '-a', ff, dest_dir]
+        for file_path in files:
+            remote_path = posixpath.join(root, file_path)
+            local_path = posixpath.join(target_dir, file_path)
+            parent_dir = posixpath.dirname(file_path)
+            local_fs.makedirs(posixpath.join(target_dir, parent_dir), remote_dirs[parent_dir])
+            # On windows, some Chinese filenames can be truncated when the target file name is not specified explicitly.
+            # Always specify the full filename rather than the target directory.
+            cmd = ['pull', '-a', remote_path, local_path]
             self.run(cmd)
 
     def get_pull_files(self, remote_files, target_dir):

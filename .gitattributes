@@ -1,2 +1,2 @@
-/backup text eol=lf
+/backup text eol=lf executable
 *.bat text eol=crlf
