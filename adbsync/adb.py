@@ -4,6 +4,7 @@ import posixpath
 import shlex
 import shutil
 import subprocess
+import sys
 import typing
 
 from datetime import datetime
@@ -37,14 +38,19 @@ def load_exclude_file(exclude_file: str) -> pathspec.PathSpec:
 
 
 class ADB():
-    def __init__(self, adb: str, device: str = None):
+    def __init__(self, adb: str, device: str = ""):
         self.adb = adb
         self.device = device
 
-    def run(self, cmd: typing.List[str], *args, **kwargs) -> int:
+    def call(self, cmd: typing.List[str], *args, **kwargs) -> int:
         full_cmd = self.extend_cmd(cmd)
         # print(f"Running command: {' '.join(full_cmd)}")
         return subprocess.call(full_cmd, *args, **kwargs)
+
+    def run(self, cmd: typing.List[str], *args, **kwargs) -> subprocess.CompletedProcess:
+        full_cmd = self.extend_cmd(cmd)
+        # print(f"Running command: {' '.join(full_cmd)}")
+        return subprocess.run(full_cmd, *args, **kwargs)
 
     def check_output(self, cmd: typing.List[str], *args, **kwargs) -> str:
         full_cmd = self.extend_cmd(cmd)
@@ -57,9 +63,6 @@ class ADB():
             full_cmd.extend(['-s', self.device])
         full_cmd.extend(cmd)
         return full_cmd
-
-    def shell(self, cmd) -> int:
-        return self.run(['shell'] + [cmd])
 
     def pull(self, source_dirs, target_dir, old_backup_dir, exclude_file):
         filter = load_exclude_file(exclude_file)
@@ -103,7 +106,7 @@ class ADB():
         #   - Unambiguously detect blank or whitespace-containing paths
         #   - Treat the root directory (empty %P) consistently as `//`
         full_dir = posixpath.join(root, source_dir)
-        find_cmd = f'find "{full_dir}" \( -type f -or -type d ! -empty \) -printf "%M %s %T@ /%P/\n"'
+        find_cmd = rf'find "{full_dir}" \( -type f -or -type d ! -empty \) -printf "%M %s %T@ /%P/\n"'
         cmd = ['shell', find_cmd]
         output = self.check_output(cmd)
         dirs, files = self.parse_find_output(root, source_dir, output, filter)
@@ -214,7 +217,7 @@ class ADB():
         dest_dir = posixpath.join(target_dir, parent_dir)
         local_fs.makedirs(dest_dir, remote_dirs.get(parent_dir))
         cmd = ['pull', '-a', posixpath.join(root, source_dir) + '/', dest_dir]
-        self.run(cmd)
+        self.call(cmd)
         # adb pull doesn't support exclude option, remove them from the target_dir.
         local_fs.remove_excluded(target_dir, source_dir, filter)
 
@@ -229,7 +232,24 @@ class ADB():
             # On windows, some Chinese filenames can be truncated when the target file name is not specified explicitly.
             # Always specify the full filename rather than the target directory.
             cmd = ['pull', '-a', remote_path, local_path]
-            self.run(cmd)
+            if os.name != 'nt':
+                return self.call(cmd)
+
+            # On windows, ADB can't handle some target path correctly,
+            # retry with pull to current dir and move to the target dir.
+            ret = self.run(cmd, stderr=subprocess.PIPE, text=True)
+            if ret.returncode == 0:
+                return 0
+            if 'cannot create file/directory' in ret.stderr:
+                file_name = posixpath.basename(file_path)
+                cmd = ['pull', '-a', remote_path, file_name]
+                if self.call(cmd) == 0:
+                    shutil.move(file_name, local_path)
+                    return 0
+            else:
+                sys.stderr.write(ret.stderr)
+                return ret.returncode
+            return 1
 
     def get_pull_files(self, remote_files, target_dir):
         result = []
