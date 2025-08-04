@@ -224,32 +224,36 @@ class ADB():
     def pull_files(self, root, remote_dirs, files, target_dir):
         """Pull files from the remote device to the target directory."""
         files = self.get_pull_files(files, target_dir)
+        ret = 0
         for file_path in files:
-            remote_path = posixpath.join(root, file_path)
-            local_path = posixpath.join(target_dir, file_path)
-            parent_dir = posixpath.dirname(file_path)
-            local_fs.makedirs(posixpath.join(target_dir, parent_dir), remote_dirs[parent_dir])
-            # On windows, some Chinese filenames can be truncated when the target file name is not specified explicitly.
-            # Always specify the full filename rather than the target directory.
-            cmd = ['pull', '-a', remote_path, local_path]
-            if os.name != 'nt':
-                return self.call(cmd)
+            ret = self.pull_one_file(root, remote_dirs, file_path, target_dir) or ret
+        return ret
 
-            # On windows, ADB can't handle some target path correctly,
-            # retry with pull to current dir and move to the target dir.
-            ret = self.run(cmd, stderr=subprocess.PIPE, text=True)
-            if ret.returncode == 0:
-                return 0
-            if 'cannot create file/directory' in ret.stderr:
-                file_name = posixpath.basename(file_path)
-                cmd = ['pull', '-a', remote_path, file_name]
-                if self.call(cmd) == 0:
-                    shutil.move(file_name, local_path)
-                    return 0
-            else:
-                sys.stderr.write(ret.stderr)
-                return ret.returncode
-            return 1
+    def pull_one_file(self, root, remote_dirs, file_path, target_dir):
+        """Pull one file from remote to local."""
+        remote_path = posixpath.join(root, file_path)
+        local_path = posixpath.join(target_dir, file_path)
+        parent_dir = posixpath.dirname(file_path)
+        local_fs.makedirs(posixpath.join(target_dir, parent_dir), remote_dirs[parent_dir])
+        # On windows, some Chinese filenames can be truncated when the target file name is not specified explicitly.
+        # Always specify the full filename rather than only the target directory.
+        cmd = ['pull', '-a', remote_path, local_path]
+        if os.name != 'nt':
+            return self.call(cmd)
+
+        # On windows, ADB can't handle some Chinese target path correctly,
+        # retry with pulling to current dir and move to the target dir.
+        ret = self.run(cmd, stderr=subprocess.PIPE, text=True)
+        if ret.returncode == 0:
+            return 0
+        if 'cannot create file/directory' in ret.stderr:
+            file_name = posixpath.basename(file_path)
+            cmd = ['pull', '-a', remote_path, file_name]
+            if self.call(cmd) == 0:
+                shutil.move(file_name, local_path)
+            return 0
+        sys.stderr.write(ret.stderr)
+        return 1
 
     def get_pull_files(self, remote_files, target_dir):
         result = []
