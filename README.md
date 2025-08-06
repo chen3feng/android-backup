@@ -2,7 +2,7 @@
 
 English | [简体中文](README-zh.md)
 
-Automatically and incrementally back up files, photos, and more from your Android device to your computer's hard drive, USB flash drive, or external hard drive via a USB cable or wireless network.
+Automatically and incrementally back up files, photos, and more from your Android device (phone or tablet) to your computer's hard drive, USB flash drive, or external hard drive via a USB cable or wireless network.
 
 Advantages:
 
@@ -14,11 +14,11 @@ Advantages:
 
 ## Features
 
-- Automatically pull files from your phone to a local backup directory
+- Automatically pull files from your device to a local backup directory
 - Configurable list of directories to pull
 - Incremental backup, only pulls new and changed files, typically completes in 1 minutes if there are only a few changed files.
 - Supports multi-version backups, backing up a new snapshot to a new directory each time, and only increasing the storage space used by the changes
-- Backs up multiple connected phones at once
+- Backs up multiple connected devices at once
 - Supports wireless backup over the network
 
 ## Usage
@@ -29,7 +29,7 @@ Advantages:
   or use a package manager like home brew.
 - Install [Python](https://www.python.org/), every programmer knows how to do it.
 - Install pathspec: `pip install pathspec`
-- Enable USB debugging on your phone (https://developer.android.com/studio/debug/dev-options)
+- Enable USB debugging on your device (https://developer.android.com/studio/debug/dev-options)
 - Download the source code for this program.
 
 ### Configuration
@@ -142,11 +142,11 @@ MULTIPLE_VERSIONS = True
 
 ### Wireless Network Backup
 
-Make sure your phone and computer are connected to the same WiFi.
-Enable [wireless debugging](https://developer.android.com/tools/adb?wireless-android11-command-line#connect-to-a-device-over-wi-fi) on your phone,
+Make sure your device and computer are connected to the same WiFi.
+Enable [wireless debugging](https://developer.android.com/tools/adb?wireless-android11-command-line#connect-to-a-device-over-wi-fi) on your device,
 you can see the IP address and port, such as `172.20.10.8:39915`.
 
-Run the `adb connect` command to connect to the phone:
+Run the `adb connect` command to connect to the device:
 
 ```console
 adb connect 172.20.9.21:35768
@@ -170,15 +170,17 @@ When using exFAT, it is strongly recommended to store sensitive data using VeraC
 
 ## Background
 
-I've never paid for cloud services. Partly because I find the monthly fees annoying, and partly because I don't trust these vendors.
+I've never paid for a cloud service. Partly because I find the monthly fees annoying, and partly because I don't trust these vendors. So, I've always manually backed up my phone's files to a local storage device using my computer.
 
-So, I've always manually backed up my phone's files to a local storage device using my computer. I've also looked for software, but some require rooting your phone, and some have limited free features.
+I've tried a number of backup apps, some of which require rooting your phone, and some have limited free features.
 
-Copying files via the MTP protocol is very slow and unstable. It frequently drops the connection, doesn't support update mode, and makes it difficult to determine which files need updating. I've had to copy everything at once, which takes a long time.
+I've also tried these manually ways:
 
-I've also tried FTP, but it's not very fast either. Some software can display your phone like an external hard drive.
+- Copying files via the MTP protocol is a nightmare, it often results in disconnections and hangs.
+- The FTP protocol is better but still not very fast enough.
+- There are also apps that can display your phone like a portable hard drive.
 
-Furthermore, all of these protocols and software require manual file selection for synchronization.
+Besides the stability issues, the main problem with all of these backup protocols and software is that they all require manual file selection for synchronization. Since there's no way to determine which files need to be updated, Is have to copy them all to the computer, which takes a long time each time.
 
 After careful consideration, I realized I needed a tool like [rsync](https://download.samba.org/pub/rsync/rsync.1) that allows incremental transfers and customizable file filtering rules.
 
@@ -200,7 +202,7 @@ The `backup` command provides a directory line user interface, responsible for i
 
 The process of incremental pull:
 
-- Use the `adb shell find` command to scan the directory to be backed up on the phone, obtain a list of
+- Use the `adb shell find` command to scan the directory to be backed up on the device, obtain a list of
   basic directory and file information, and compare it with the files in the local target directory.
 - For directories that do not exist locally, use `adb pull <remote_directory> <local_directory>` to pull them directly.
 - For existing files, compare the timestamps and file sizes. If they differ, use adb pull to pull them locally.
