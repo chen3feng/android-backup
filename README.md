@@ -111,6 +111,27 @@ The default is single-version backup, which means that each backup refreshes the
 
 Multi-version backup means that each backup creates a new backup directory named in the date format, such as `2025-08-03`. This leaves the previous backup directory, such as `2025-07-31`, unaffected. On file systems that support [hard links](https://en.wikipedia.org/wiki/Hard_link) (NTFS on Windows, the default file systems on Linux and Mac), this can significantly save hard disk storage space.
 
+```console
+$ du -sh backups/xiaomi12/*
+ 31G    backups/xiaomi12/2025-08-01
+2.9G    backups/xiaomi12/2025-08-02
+ 11M    backups/xiaomi12/2025-08-03
+ 98M    backups/xiaomi12/2025-08-04
+ 16M    backups/xiaomi12/2025-08-06
+  0B    backups/xiaomi12/latest
+
+$ du -sh backups/xiaomi12/2025-08-01/
+ 31G    backups/xiaomi12/2025-08-01/
+$ du -sh backups/xiaomi12/2025-08-02/
+ 34G    backups/xiaomi12/2025-08-02/
+$ du -sh backups/xiaomi12/2025-08-03/
+ 31G    backups/xiaomi12/2025-08-03/
+$ du -sh backups/xiaomi12/2025-08-04/
+ 31G    backups/xiaomi12/2025-08-04/
+$ du -sh backups/xiaomi12/2025-08-06/
+ 31G    backups/xiaomi12/2025-08-06/
+```
+
 On file systems that don't support hard links, such as FAT32 and exFAT, multi-version backups are performed by copying, which is much slower. The storage space occupied by each version cannot be shared, so it's not advisable to retain too many historical versions.
 
 Enable this feature in the device's configuration file:
