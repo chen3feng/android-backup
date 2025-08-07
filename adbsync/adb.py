@@ -87,7 +87,7 @@ class ADB():
             print(f"Failed to scan remote directory {source_dir}")
             return
 
-        if old_backup_dir:
+        if local_fs.is_valid_old_backup_dir(old_backup_dir, target_dir):
             self.local_sync(old_backup_dir, remote_dirs, remote_files, target_dir, source_dir, filter)
 
         self.pull_dirs(root, remote_dirs, target_dir, filter)
@@ -148,13 +148,13 @@ class ADB():
         for d in empty:
             dirs.pop(d)
 
+    def is_valid_old_backup_dir(self, old_backup_dir: str, target_dir: str) -> bool:
+        return (old_backup_dir and os.path.isdir(old_backup_dir) and
+            os.path.realpath(old_backup_dir) != os.path.realpath(target_dir))
+
     def local_sync(self, old_backup_dir, remote_dirs, remote_files, target_dir, source_dir, filter):
         """Sync file from old backup."""
-        if not os.path.isdir(old_backup_dir):
-            return
-        if posixpath.realpath(old_backup_dir) == posixpath.realpath(target_dir):
-            return
-        print(f'Syncing {old_backup_dir} to {target_dir}')
+        print(f'Syncing {posixpath.join(old_backup_dir, source_dir)} to {target_dir}')
         support_hardlink = None
         progress_printed = False
         progress_time = datetime.now()

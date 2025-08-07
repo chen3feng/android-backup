@@ -46,6 +46,12 @@ def makedirs(dirpath: str, timestamp: typing.Optional[float]) -> None:
             os.utime(dirpath, (timestamp, timestamp))
 
 
+def is_valid_old_backup_dir(old_backup_dir: str, target_dir: str) -> bool:
+    """Return whether the old_backup_dir is valid"""
+    return (old_backup_dir and os.path.isdir(old_backup_dir) and
+        os.path.realpath(old_backup_dir) != os.path.realpath(target_dir))
+
+
 def sync_file(old_file: str, new_file: str, support_hardlink) -> bool:
     """Sync in local filesystem, use hardlink if it is supported."""
     if support_hardlink is not None:
