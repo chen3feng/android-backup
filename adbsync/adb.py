@@ -138,19 +138,14 @@ class ADB():
         """Remove all dirs which no file to be synced under them."""
         non_empty = set()
         for f in files:
-            # Add the parents to non_empty set
+            # Add all parents of each file to non_empty set
             d = posixpath.dirname(f)
-            non_empty.add(d)
             while d:
-                d = posixpath.dirname(d)
                 non_empty.add(d)
+                d = posixpath.dirname(d)
         empty = dirs.keys() - non_empty
         for d in empty:
             dirs.pop(d)
-
-    def is_valid_old_backup_dir(self, old_backup_dir: str, target_dir: str) -> bool:
-        return (old_backup_dir and os.path.isdir(old_backup_dir) and
-            os.path.realpath(old_backup_dir) != os.path.realpath(target_dir))
 
     def local_sync(self, old_backup_dir, remote_dirs, remote_files, target_dir, source_dir, filter):
         """Sync file from old backup."""

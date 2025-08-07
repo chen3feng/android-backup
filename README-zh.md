@@ -66,13 +66,13 @@ List of devices attached
 
 Windows 系统：
 
-```
+```console
 backup
 ```
 
 Mac/Linux 系统：
 
-```
+```console
 ./backup
 ```
 
@@ -109,15 +109,9 @@ Updated latest link to 2025-08-03
 
 多版本备份是指每次备份时产生一个全新的备份目录，以日期格式命名，比如 `2025-08-03`，这样先前的备份目录比如 `2025-07-31` 不受影响。在支持[硬链接](https://sspai.com/post/66834)的文件系统上（Windows 上的 NTFS，Linux 和 Mac 的默认文件系统都支持），可以大幅度节省硬盘存储空间开销。
 
-```console
-$ du -sh backups/xiaomi12/*
- 31G    backups/xiaomi12/2025-08-01
-2.9G    backups/xiaomi12/2025-08-02
- 11M    backups/xiaomi12/2025-08-03
- 98M    backups/xiaomi12/2025-08-04
- 16M    backups/xiaomi12/2025-08-06
-  0B    backups/xiaomi12/latest
+每个日期的备份目录看起来都是全量的：
 
+```console
 $ du -sh backups/xiaomi12/2025-08-01/
  31G    backups/xiaomi12/2025-08-01/
 $ du -sh backups/xiaomi12/2025-08-02/
@@ -128,6 +122,18 @@ $ du -sh backups/xiaomi12/2025-08-04/
  31G    backups/xiaomi12/2025-08-04/
 $ du -sh backups/xiaomi12/2025-08-06/
  31G    backups/xiaomi12/2025-08-06/
+```
+
+但是实际的存储开销增加很小：
+
+```console
+$ du -sh backups/xiaomi12/*
+ 31G    backups/xiaomi12/2025-08-01
+2.9G    backups/xiaomi12/2025-08-02
+ 11M    backups/xiaomi12/2025-08-03
+ 98M    backups/xiaomi12/2025-08-04
+ 16M    backups/xiaomi12/2025-08-06
+  0B    backups/xiaomi12/latest
 ```
 
 在不支持硬链接的文件系统上，比如 FAT32 和 exFAT，多版本备份是以拷贝的方式进行的，因此速度慢很多，每个版本存储空间占用也无法共享，因此不宜保留太多的历史版本。

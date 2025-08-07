@@ -71,7 +71,7 @@ def pull_device(adb_path, device, config, device_config):
         version_dir = datetime.now().strftime("%Y-%m-%d")
         backup_dir = posixpath.join(device_backup_dir, version_dir)
         os.makedirs(backup_dir, exist_ok=True)
-        latest_link_file, old_backup_dir = get_last_backup_dir(device_backup_dir)
+        latest_file, old_backup_dir = get_last_backup_dir(device_backup_dir)
     else:
         backup_dir = device_backup_dir
         old_backup_dir = None
@@ -86,8 +86,8 @@ def pull_device(adb_path, device, config, device_config):
     )
 
     if multiple_versions:
-        if update_latest(latest_link_file, version_dir):
-            print(f"Updated latest link to {version_dir}")
+        if update_latest(latest_file, version_dir):
+            print(f"Updated latest -> {version_dir}")
         else:
             print(f"Failed to update latest link to {version_dir}")
             if sys.platform.startswith("win"):
@@ -98,60 +98,62 @@ def pull_device(adb_path, device, config, device_config):
 
 def get_last_backup_dir(device_backup_dir) -> typing.Tuple[str, typing.Optional[str]]:
     """
-    Get the last backup directory from the latest symlink or file.
-    If the symlink or file does not exist, return None.
+    Get the last backup directory from the latest symlink or tag file.
+    If the symlink or tag file does not exist, return None.
     """
-    latest_link_file = posixpath.join(device_backup_dir, 'latest')
-    if os.path.exists(latest_link_file):
-        if os.path.islink(latest_link_file):
-            old_backup_dir = os.readlink(latest_link_file)
+    latest_file = posixpath.join(device_backup_dir, 'latest')
+    if os.path.exists(latest_file):
+        if os.path.islink(latest_file):
+            old_backup_dir = os.readlink(latest_file)
             if not os.path.isabs(old_backup_dir):
                 old_backup_dir = posixpath.join(device_backup_dir, old_backup_dir)
-            return latest_link_file, old_backup_dir
-        with open(latest_link_file, 'r') as f:
+            return latest_file, old_backup_dir
+        with open(latest_file, 'r') as f:
             old_backup_dir = f.read().strip()
         if not os.path.isabs(old_backup_dir):
             old_backup_dir = posixpath.join(device_backup_dir, old_backup_dir)
-        return latest_link_file, old_backup_dir
-    return latest_link_file, None
+        return latest_file, old_backup_dir
+    return latest_file, None
 
 
-def update_latest(link_file, version_dir) -> bool:
+def update_latest(latest_file, version_dir) -> bool:
     """
-    Update the latest symlink or file to point to the new version directory.
+    Update the latest symlink or tag file to point to the new version directory.
     """
-    if os.path.exists(link_file):
-        if os.path.islink(link_file):
-            return update_link(link_file, version_dir)
+    if os.path.exists(latest_file):
+        if os.path.islink(latest_file):
+            return update_symlink(latest_file, version_dir)
         else:
-            return create_link_file(link_file, version_dir)
+            return update_tag_file(latest_file, version_dir)
     else:
-        if not update_link(link_file, version_dir):
-            return create_link_file(link_file, version_dir)
+        if not update_symlink(latest_file, version_dir):
+            return update_tag_file(latest_file, version_dir)
     return False
 
 
-def create_link_file(link_file, version_dir) -> bool:
+def update_symlink(latest_file, version_dir) -> bool:
+    """Update the target path of a symlink."""
+    if os.path.exists(latest_file):
+        if os.path.islink(latest_file):
+            if os.readlink(latest_file) == version_dir:
+                return True
+            os.remove(latest_file)
     try:
-        with open(link_file, 'w') as f:
+        os.symlink(version_dir, latest_file, target_is_directory=False)
+        return True
+    except OSError as e:
+        pass
+    return False
+
+
+def update_tag_file(latest_file, version_dir) -> bool:
+    """Update the target path in a tag file."""
+    try:
+        with open(latest_file, 'w') as f:
             f.write(version_dir)
             return True
     except OSError as e:
         print(f"[ERROR] Failed to create link file: {e}")
-    return False
-
-
-def update_link(link_file, version_dir) -> bool:
-    try:
-        if os.readlink(link_file) == version_dir:
-            return True
-        if os.path.islink(link_file) or os.path.exists(link_file):
-            os.remove(link_file)
-        os.symlink(version_dir, link_file,
-                   target_is_directory=False)
-        return True
-    except OSError as e:
-        pass
     return False
 
 
