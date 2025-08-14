@@ -9,8 +9,10 @@ The compressed video will be pushed back to the device with the original timesta
 """
 
 import argparse
+import enum
 import subprocess
 import os
+import stat
 import sys
 import tempfile
 import typing
@@ -52,7 +54,7 @@ encoder_quality = {
 }
 
 
-def get_encoder_quality(encoder: str, quality: str) -> list[str]:
+def get_encoder_quality(encoder: str, quality: str) -> typing.List[str]:
     """Get the encoder quality settings."""
     if encoder not in encoder_quality:
         return []
@@ -105,7 +107,7 @@ def get_best_encoder() -> str:
     return BEST_ENCODER
 
 
-def check_encoders(encoders: list[str], default: str='libx265') -> str:
+def check_encoders(encoders: typing.List[str], default: str='libx265') -> str:
     """Check whether the encoder is available, return the first available one."""
     for encoder in encoders:
         if is_encoder_available(encoder):
@@ -152,13 +154,14 @@ def adb_pull_file(device_path: str, local_path: str) -> int:
     return subprocess.call(["adb", "pull", "-a", device_path, local_path])
 
 
-def adb_push_with_timestamp(local_path: str, device_path: str, timestamp: float):
+def adb_push(local_path: str, device_path: str, timestamp: float) -> int:
     """Push a file to the Android device and set its timestamp."""
     print("Pushing back compressed file to device.")
     returncode = subprocess.call(["adb", "push", local_path, device_path])
     if returncode != 0:
         return returncode
-
+    if timestamp == 0.0:
+        return 0
     dt = datetime.fromtimestamp(timestamp)
     touch_time = dt.strftime("%Y%m%d%H%M.%S")
 
@@ -166,76 +169,76 @@ def adb_push_with_timestamp(local_path: str, device_path: str, timestamp: float)
     return subprocess.call(["adb", "shell", cmd], stdout=subprocess.DEVNULL)
 
 
-def is_compressed(compressed_size: int, original_size: int) -> bool:
-    """Check whether the video is effectively compressed."""
-    if compressed_size >= original_size:
-        print(f"Compressed size is larger: {compressed_size} > {original_size}.")
-        return False
-    if compressed_size / original_size > 0.9:
-        print(f"Compressed size is not smaller enough: {compressed_size} vs {original_size}.")
-        return False
-    return True
+class CompressResult(enum.Enum):
+    Success = 1
+    Skipped = 2
+    Failure = 3
 
-
-def compress_remote_video(full_path: str, tmpdir: str, quality: str, dry_run: bool) -> int:
+def compress_remote_video(full_path: str, tmpdir: str, quality: str, dry_run: bool) -> CompressResult:
     """Compress a remote video file."""
     local_original = os.path.join(tmpdir, "original.mp4")
     local_compressed = os.path.join(tmpdir, "compressed.mp4")
 
-    print(f"Processing file: {full_path}")
-
     if adb_pull_file(full_path, local_original) != 0:
-        return 1
+        return CompressResult.Failure
 
     video_info = get_video_info(local_original)
 
     if not need_to_compress(video_info, quality):
-        print('File is already compressed at the expected format.')
-        return 0
+        print('File is already compressed at the expected quality.')
+        return CompressResult.Skipped
 
     print("Compressing file...")
     if compress_video_ffmpeg(local_original, local_compressed, quality) != 0:
-        return 1
+        return CompressResult.Failure
 
     compressed_size = os.path.getsize(local_compressed)
     original_size = os.path.getsize(local_original)
-    if not is_compressed(compressed_size, original_size):
-        print("Compressed file is not smaller than original, skipping push.")
-        return 0
+    compression_ratio = compressed_size / original_size
+    print(f"Compression ratio: {compressed_size}/{original_size} = {compression_ratio:.2%}")
+    if compression_ratio > 0.95:
+        print(f"File is not effectively compressed, skipping push.")
+        return CompressResult.Skipped
 
-    print(f"Compress rate: {compressed_size}/{original_size} = {compressed_size / original_size:.2%}")
 
     # dry run for test
     if dry_run:
-        print("Dry run: Skipped to push it back to device.")
-        return 0
+        print("Dry run: do not push it back to device.")
+        return CompressResult.Success
 
     original_mtime = os.path.getmtime(local_original)
-    return adb_push_with_timestamp(local_compressed, full_path, original_mtime)
+    if adb_push(local_compressed, full_path, original_mtime) != 0:
+        return CompressResult.Failure
+
+    return CompressResult.Success
 
 
 def need_to_compress(video_info: dict, quality: str) -> bool:
     """Check whether the video need to be compressed."""
     target_bitrate = get_target_bitrate(video_info, quality)
-    if video_info['bitrate'] < target_bitrate * 1.1:
+    if video_info['bitrate'] < target_bitrate * 1.2:
         return False
     return True
 
 
 def compress_multiple_remote_video(full_paths, quality, dry_run: bool) -> int:
     """Compress multiple remote video files."""
-    print(f"Compressing {len(full_paths)} video files with {quality} quality ...\n")
-    success_count = 0
+    print(f"Compressing {len(full_paths)} video files with {quality} quality...\n")
+    counters = {r:0 for r in CompressResult}
     with tempfile.TemporaryDirectory() as tmpdir:
-        for full_path, size in full_paths.items():
-            if size > 0 and size < 1*MB:
+        for i, (full_path, size) in enumerate(full_paths.items()):
+            print(f"Processing {i+1}/{len(full_paths)} file: {full_path}")
+            if size < 1*MB:
                 print(f"File{full_path} is too small to be worth compressing, skipping.")
-                success_count += 1
+                skipped_count += 1
                 continue
-            success_count += compress_remote_video(full_path, tmpdir, quality, dry_run)
+            result = compress_remote_video(full_path, tmpdir, quality, dry_run)
+            counters[result] += 1
             print() # Add a newline for better readability
-    print(f"Compressed {success_count} out of {len(full_paths)} video files.")
-    return 0 if success_count == len(full_paths) else 1
+    print(f"Compressed {counters[CompressResult.Success]}, "
+          f"skipped {counters[CompressResult.Skipped]}, "
+          f"failed {counters[CompressResult.Failure]} files.")
+    return int(counters[CompressResult.Failure] != 0)
 
 
 def scan_video_dir(device_path: str) -> dict:
@@ -266,18 +269,66 @@ def compress_video_file(device_path: str, quality: str, dry_run: bool) -> int:
 def compress_paths(device_paths: typing.List[str], quality: str, dry_run: bool) -> int:
     """Compress a video file or video files under directory on the Android device."""
     paths = {}
+    nonexist_count = 0
     for device_path in device_paths:
-        if not remote_path_exists(device_path):
-            print(f"Remote path {device_path} does not exist.")
+        try:
+            st = adb_stat(device_path)
+        except Exception as e:
+            print(f"Remote path {device_path} does not exist.  {e}")
+            nonexist_count += 1
             continue
-        if remote_path_isdir(device_path):
+        if stat.S_ISDIR(st.st_mode):
             paths.update(scan_video_dir(device_path))
         else:
-            paths.update({device_path: 0})  # Size will be determined later
+            paths.update({device_path: st.st_size})
     if not paths:
         print("No valid video files found to compress.")
-        return 0
+        return int(nonexist_count != 0)
     return compress_multiple_remote_video(paths, quality, dry_run)
+
+
+def adb_stat(path: str, device: str="") -> os.stat_result:
+    """
+    Get file stat info from an Android device via adb.
+    Returns an os.stat_result object, same as os.stat().
+
+    :param path: File path on the device
+    :param device: Optional device serial (adb -s)
+    :return: os.stat_result
+    """
+    # Build adb command
+    cmd = ["adb"]
+    if device:
+        cmd += ["-s", device]
+    stat_cmd = f'stat -c "%s %f %u %g %d %i %h %X %Y %Z" "{path}"'
+    cmd += ["shell", stat_cmd]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        output = result.stdout.strip()
+        if not output:
+            raise FileNotFoundError(f"No such file: {path}")
+
+        # Parse stat output
+        size, mode_hex, uid, gid, dev, inode, nlink, atime, mtime, ctime = output.split()
+
+        # Build os.stat_result (fields: mode, ino, dev, nlink, uid, gid, size, atime, mtime, ctime)
+        stat_tuple = (
+            int(mode_hex, 16),  # st_mode
+            int(inode),         # st_ino
+            int(dev),           # st_dev
+            int(nlink),         # st_nlink
+            int(uid),           # st_uid
+            int(gid),           # st_gid
+            int(size),          # st_size
+            int(atime),         # st_atime
+            int(mtime),         # st_mtime
+            int(ctime)          # st_ctime
+        )
+
+        return os.stat_result(stat_tuple)
+
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"ADB command failed: {e.stderr.strip()}")
 
 
 def remote_path_exists(path: str, device: str = "") -> bool:

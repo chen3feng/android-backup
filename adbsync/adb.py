@@ -157,7 +157,7 @@ class ADB():
             # Show progress
             now = datetime.now()
             if (now - progress_time).total_seconds() > 1:
-                print(f'\rProgress: {i}/{len(remote_files)}', end='', flush=True)
+                print(f'\rProgress: {i+1}/{len(remote_files)}', end='', flush=True)
                 progress_printed = True
                 progress_time = now
 
