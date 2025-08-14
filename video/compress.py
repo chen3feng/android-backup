@@ -279,6 +279,7 @@ def compress_paths(device_paths: typing.List[str], quality: str, dry_run: bool) 
         return 0
     return compress_multiple_remote_video(paths, quality, dry_run)
 
+
 def remote_path_exists(path: str, device: str = "") -> bool:
     """
     Check if a path exists on the Android device.
