@@ -1,3 +1,5 @@
+"""This file contains functions for operations on the local filesystem."""
+
 import os
 import posixpath
 import shutil
@@ -48,7 +50,7 @@ def makedirs(dirpath: str, timestamp: typing.Optional[float]) -> None:
 
 def is_valid_old_backup_dir(old_backup_dir: str, target_dir: str) -> bool:
     """Return whether the old_backup_dir is valid"""
-    return (old_backup_dir and os.path.isdir(old_backup_dir) and
+    return (bool(old_backup_dir) and os.path.isdir(old_backup_dir) and
         os.path.realpath(old_backup_dir) != os.path.realpath(target_dir))
 
 
@@ -63,7 +65,7 @@ def sync_file(old_file: str, new_file: str, support_hardlink) -> bool:
         try:
             os.link(os.path.join(old_file), new_file)
         except OSError:
-            print(f"[WARNING] Backup filesystem doesn't support hard link, use copy instead.")
+            print("[WARNING] Backup filesystem doesn't support hard link, use copy instead.")
             shutil.copy2(old_file, new_file)
             support_hardlink = False
     return support_hardlink
