@@ -15,6 +15,7 @@ import os
 import stat
 import sys
 import tempfile
+import textwrap
 import typing
 from datetime import datetime
 
@@ -366,7 +367,23 @@ def remote_path_isdir(path: str, device: str = "") -> bool:
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Video compression script with quality options"
+        prog="video/compress.py",
+        usage = "Compress video files on Android device to reduce the storage.",
+        description=textwrap.dedent("""
+            Each path can be a single video file or a directory containing video files.
+            The program will use the best available encoder according to your system.
+            The compressed video will be pushed back to the device with the original timestamp.
+
+            Example usage:
+              python video/compress.py -q medium /sdcard/Movies/video.mp4
+              python video/compress.py -q high /sdcard/Movies
+              python video/compress.py /sdcard/DCIM/Camera /sdcard/Movies
+        """),
+        epilog=textwrap.dedent("""
+            Note: This script requires adb, ffmpeg and exiftool to be installed on your system.
+            Make sure you have adb set up and connected to your Android device.
+        """),
+        formatter_class=argparse.RawTextHelpFormatter
     )
     parser.add_argument(
         "-q", "--quality",
