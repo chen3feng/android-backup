@@ -1,6 +1,18 @@
 @echo off
 setlocal enabledelayedexpansion
 
+set HAS_ERROR=0
+
+call :CheckInstall python3
+call :CheckInstall adb
+call :CheckInstall ffmpeg
+call :CheckInstall exiftool
+
+if "%HAS_ERROR%" == "1" (
+    Missing required software packages.
+    exit /b 1
+)
+
 :: Initialize
 set PYTHON=
 
@@ -26,3 +38,13 @@ if defined PYTHON (
 )
 
 endlocal & set "PYTHON=%PYTHON%"
+
+goto :EOF
+
+:CheckInstall
+    where %1 >nul 2>nul
+    if not %errorlevel%==0 (
+        echo Not found %1, please run setup.bat or install manually.
+        set HAS_ERROR=1
+    )
+exit /b 0
