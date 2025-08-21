@@ -161,7 +161,7 @@ def adb_push(local_path: str, device_path: str, timestamp: float) -> int:
     returncode = subprocess.call(["adb", "push", local_path, device_path])
     if returncode != 0:
         return returncode
-    if timestamp == 0.0:
+    if timestamp == 0:
         return 0
     dt = datetime.fromtimestamp(timestamp)
     touch_time = dt.strftime("%Y%m%d%H%M.%S")
@@ -171,9 +171,12 @@ def adb_push(local_path: str, device_path: str, timestamp: float) -> int:
 
 
 class CompressResult(enum.Enum):
-    Success = 1
-    Skipped = 2
-    Failure = 3
+    """
+    Compession result enum.
+    """
+    SUCCESS = 1
+    SKIPPED = 2
+    FAILURE = 3
 
 def compress_remote_video(full_path: str, tmpdir: str, quality: str, dry_run: bool) -> CompressResult:
     """Compress a remote video file."""
@@ -181,37 +184,37 @@ def compress_remote_video(full_path: str, tmpdir: str, quality: str, dry_run: bo
     local_compressed = os.path.join(tmpdir, "compressed.mp4")
 
     if adb_pull_file(full_path, local_original) != 0:
-        return CompressResult.Failure
+        return CompressResult.FAILURE
 
     video_info = get_video_info(local_original)
 
     if not need_to_compress(video_info, quality):
         print('File is already compressed at the expected quality.')
-        return CompressResult.Skipped
+        return CompressResult.SKIPPED
 
     print("Compressing file...")
     if compress_video_ffmpeg(local_original, local_compressed, quality) != 0:
-        return CompressResult.Failure
+        return CompressResult.FAILURE
 
     compressed_size = os.path.getsize(local_compressed)
     original_size = os.path.getsize(local_original)
     compression_ratio = compressed_size / original_size
     print(f"Compression ratio: {compressed_size}/{original_size} = {compression_ratio:.2%}")
     if compression_ratio > 0.95:
-        print(f"File is not effectively compressed, skipping push.")
-        return CompressResult.Skipped
+        print("File is not effectively compressed, skipping push.")
+        return CompressResult.SKIPPED
 
 
     # dry run for test
     if dry_run:
         print("Dry run: do not push it back to device.")
-        return CompressResult.Success
+        return CompressResult.SUCCESS
 
     original_mtime = os.path.getmtime(local_original)
     if adb_push(local_compressed, full_path, original_mtime) != 0:
-        return CompressResult.Failure
+        return CompressResult.FAILURE
 
-    return CompressResult.Success
+    return CompressResult.SUCCESS
 
 
 def need_to_compress(video_info: dict, quality: str) -> bool:
@@ -231,15 +234,15 @@ def compress_multiple_remote_video(full_paths, quality, dry_run: bool) -> int:
             print(f"Processing {i+1}/{len(full_paths)} file: {full_path}")
             if size < 1*MB:
                 print(f"File size {size} is too small to be worth compressing, skipping.\n")
-                counters[CompressResult.Skipped] += 1
+                counters[CompressResult.SKIPPED] += 1
                 continue
             result = compress_remote_video(full_path, tmpdir, quality, dry_run)
             counters[result] += 1
             print() # Add a newline for better readability
-    print(f"Compressed {counters[CompressResult.Success]}, "
-          f"skipped {counters[CompressResult.Skipped]}, "
-          f"failed {counters[CompressResult.Failure]} files.")
-    return int(counters[CompressResult.Failure] != 0)
+    print(f"Compressed {counters[CompressResult.SUCCESS]}, "
+          f"skipped {counters[CompressResult.SKIPPED]}, "
+          f"failed {counters[CompressResult.FAILURE]} files.")
+    return int(counters[CompressResult.FAILURE] != 0)
 
 
 def scan_video_dir(device_path: str) -> dict:
@@ -329,7 +332,7 @@ def adb_stat(path: str, device: str="") -> os.stat_result:
         return os.stat_result(stat_tuple)
 
     except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"ADB command failed: {e.stderr.strip()}")
+        raise RuntimeError(f"ADB command failed: {e.stderr.strip()}") from e
 
 
 def remote_path_exists(path: str, device: str = "") -> bool:

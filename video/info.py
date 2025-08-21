@@ -9,7 +9,8 @@ def get_video_info(file_path):
         "-show_streams", "-show_format",
         file_path
     ]
-    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, check=True)
     info = json.loads(result.stdout)
 
     # Find the first video stream

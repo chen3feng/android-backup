@@ -1,7 +1,5 @@
-import itertools
 import os
 import posixpath
-import shlex
 import shutil
 import subprocess
 import sys
@@ -50,7 +48,7 @@ class ADB():
     def run(self, cmd: typing.List[str], *args, **kwargs) -> subprocess.CompletedProcess:
         full_cmd = self.extend_cmd(cmd)
         # print(f"Running command: {' '.join(full_cmd)}")
-        return subprocess.run(full_cmd, *args, **kwargs)
+        return subprocess.run(full_cmd, *args, **kwargs, check=False)
 
     def check_output(self, cmd: typing.List[str], *args, **kwargs) -> str:
         full_cmd = self.extend_cmd(cmd)
@@ -109,11 +107,11 @@ class ADB():
         find_cmd = rf'find "{full_dir}" \( -type f -or -type d ! -empty \) -printf "%M %s %T@ /%P/\n"'
         cmd = ['shell', find_cmd]
         output = self.check_output(cmd)
-        dirs, files = self.parse_find_output(root, source_dir, output, exclude_path)
+        dirs, files = self.parse_find_output(source_dir, output, exclude_path)
         self.remove_empty_dirs(dirs, files)
         return dirs, files
 
-    def parse_find_output(self, root, source_dir, output, exclude_path):
+    def parse_find_output(self, source_dir, output, exclude_path):
         """Parse the output of the `find` command, return all dir and file attributes."""
         dirs, files = {}, {}
         for line in output.splitlines():

@@ -29,7 +29,7 @@ Advantages:
   or use a package manager like home brew.
 - Install [Python](https://www.python.org/), every programmer knows how to do it.
 - Install pathspec: `pip install pathspec`
-- Enable USB debugging on your device (https://developer.android.com/studio/debug/dev-options)
+- Enable [USB debugging](https://developer.android.com/studio/debug/dev-options) on your device.
 - Download the source code for this program.
 
 ### Configuration
