@@ -15,6 +15,9 @@ from importlib.machinery import SourceFileLoader
 import adbsync
 
 
+Device = collections.namedtuple('Device', ['address', 'serial', 'name'])
+
+
 def main() -> int:
     config = load_config('global', os.path.join(os.path.dirname(__file__), 'global.conf'))
     if not config:
@@ -27,39 +30,43 @@ def main() -> int:
         print("ADB_PATH not found in configuration or environment.")
         return 1
 
-    print(f"Using adb path: {adb_path}")
-
     devices = find_devices(adb_path)
     if not devices:
         print("No device connected.")
         return 1
 
-    print(f"Find devices:")
+    print("Find devices:")
     for device in devices:
         if device.address == device.serial:
             print(f'  serial={device.serial} name="{device.name}"')
         else:
             print(f'  serial={device.serial} name="{device.name}" address={device.address}')
 
-    device_configs = {}
-
-    for device in devices:
-        config_path = os.path.join(os.path.dirname(__file__), 'devices', f'{device.serial}.conf')
-        if not os.path.exists(config_path):
-            print(f"No configuration {config_path} found.")
-            return 1
-        device_config = load_config(device.serial, config_path)
-        if not device_config:
-            print(f"Failed to load device configuration from {config_path}.")
-            return 1
-        device_configs[device.serial] = device_config
-        print(f"Loaded device configuration: {device.name}")
+    device_configs = load_device_configs(devices)
+    if not device_configs:
+        return 1
 
     ret = 0
     for device in devices:
         if pull_device(adb_path, device, config, device_configs[device.serial]) != 0:
             ret = 1
     return ret
+
+
+def load_device_configs(devices: typing.List[Device]) -> typing.Dict[str, types.ModuleType]:
+    """Load configurations for all found devices."""
+    device_configs = {}
+    for device in devices:
+        config_path = os.path.join(os.path.dirname(__file__), 'devices', f'{device.serial}.conf')
+        if not os.path.exists(config_path):
+            print(f"No configuration {config_path} found.")
+            return {}
+        config = load_config(device.serial, config_path)
+        if not config:
+            print(f"Failed to load device configuration from {config_path}.")
+            return {}
+        device_configs[device.serial] = config
+    return device_configs
 
 
 def pull_device(adb_path, device, config, device_config):
@@ -194,8 +201,6 @@ def find_adb_path() -> str:
 
     return ''
 
-
-Device = collections.namedtuple('Device', ['address', 'serial', 'name'])
 
 def find_devices(adb: str) -> typing.List[Device]:
     """

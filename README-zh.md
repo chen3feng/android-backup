@@ -81,10 +81,8 @@ Mac/Linux 系统：
 输出示例：
 
 ```console
-Using adb path: /usr/local/bin/adb
 Find devices:
   serial=7654321 name="Xiaomi 12"
-Loaded device configuration: Xiaomi 12
 Backup device Xiaomi 12 to backups/xiaomi12
 Pulling /sdcard/DCIM...
 /sdcard/DCIM/Camera/IMG_20250803_145317.jpg: 1 file pulled, 0 skipped. 26.3 MB/s (842953 bytes in 0.031s)
