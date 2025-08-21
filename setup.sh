@@ -66,7 +66,7 @@ linux::check_or_install_adb() {
     elif command -v dnf >/dev/null; then
         sudo dnf install -y android-tools
     elif command -v yum >/dev/null; then
-        sudo yum install -y adb
+        sudo yum install -y android-tools
     else
         echo "Unknown Linux distribution"
         exit 1
