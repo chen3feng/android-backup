@@ -1,6 +1,8 @@
-import argparse
+"""
+Backup files from device to local storage incrementally.
+"""
+
 import collections
-import importlib.util
 import os
 import posixpath
 import re
@@ -18,7 +20,7 @@ import adbsync
 Device = collections.namedtuple('Device', ['address', 'serial', 'name'])
 
 
-def main() -> int:
+def main() -> int:  # pylint: disable=missing-function-docstring
     config = load_config('global', os.path.join(os.path.dirname(__file__), 'global.conf'))
     if not config:
         print("No global configuration found.")
@@ -70,11 +72,13 @@ def load_device_configs(devices: typing.List[Device]) -> typing.Dict[str, types.
 
 
 def pull_device(adb_path, device, config, device_config):
-    device_backup_dir = posixpath.normpath(posixpath.join(config.BACKUP_BASE_DIR, device_config.BACKUP_DIR))
+    """Pull files from device to local according to its config."""
+    device_backup_dir = posixpath.join(config.BACKUP_BASE_DIR, device_config.BACKUP_DIR)
+    device_backup_dir = posixpath.normpath(device_backup_dir)
     print(f'Backup device {device.name} to {device_backup_dir}')
     multiple_versions = getattr(device_config, 'MULTIPLE_VERSIONS', False)
     if multiple_versions:
-        # version_dir = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        # Use daily backup to avoid too many backups.
         version_dir = datetime.now().strftime("%Y-%m-%d")
         backup_dir = posixpath.join(device_backup_dir, version_dir)
         os.makedirs(backup_dir, exist_ok=True)
@@ -115,7 +119,7 @@ def get_last_backup_dir(device_backup_dir) -> typing.Tuple[str, typing.Optional[
             if not os.path.isabs(old_backup_dir):
                 old_backup_dir = posixpath.join(device_backup_dir, old_backup_dir)
             return latest_file, old_backup_dir
-        with open(latest_file, 'r') as f:
+        with open(latest_file, 'r', encoding='utf-8') as f:
             old_backup_dir = f.read().strip()
         if not os.path.isabs(old_backup_dir):
             old_backup_dir = posixpath.join(device_backup_dir, old_backup_dir)
@@ -140,15 +144,14 @@ def update_latest(latest_file, version_dir) -> bool:
 
 def update_symlink(latest_file, version_dir) -> bool:
     """Update the target path of a symlink."""
-    if os.path.exists(latest_file):
-        if os.path.islink(latest_file):
-            if os.readlink(latest_file) == version_dir:
-                return True
-            os.remove(latest_file)
+    if os.path.exists(latest_file) and os.path.islink(latest_file):
+        if os.readlink(latest_file) == version_dir:
+            return True
+        os.remove(latest_file)
     try:
         os.symlink(version_dir, latest_file, target_is_directory=False)
         return True
-    except OSError as e:
+    except OSError:
         pass
     return False
 
@@ -156,7 +159,7 @@ def update_symlink(latest_file, version_dir) -> bool:
 def update_tag_file(latest_file, version_dir) -> bool:
     """Update the target path in a tag file."""
     try:
-        with open(latest_file, 'w') as f:
+        with open(latest_file, 'w', encoding='utf-8') as f:
             f.write(version_dir)
             return True
     except OSError as e:
@@ -167,12 +170,13 @@ def update_tag_file(latest_file, version_dir) -> bool:
 def load_config(name, config_file)-> typing.Optional[types.ModuleType]:
     """
     Load global configuration from a file.
-    The name should be unique otherwise it returns existing one.
+    The name should be unique; otherwise, it returns the existing one.
     """
     try:
-        config = SourceFileLoader(name, config_file).load_module()
+        # pylint: disable=deprecated-method
+        config = SourceFileLoader(name, config_file).load_module(name)
         return config
-    except Exception as e:
+    except Exception as e: # pylint: disable=broad-exception-caught
         print(f"Error loading configuration from {config_file}: {e}")
         return None
 
@@ -182,22 +186,22 @@ def find_adb_path() -> str:
     Find the adb executable path.
     This function should be implemented to locate the adb executable.
     """
+    which = 'which'
+    suffix = ''
     if os.name == 'nt':
-        if subprocess.call(['where', 'adb'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
-            adb_path = subprocess.check_output(['where', 'adb']).decode('utf-8').strip().splitlines()[0]
+        which = 'where'
+        suffix = '.exe'
+    result = subprocess.run([which, 'adb'],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.DEVNULL,
+                            text=True, check=False)
+    if result.returncode == 0:
+        adb_path = result.stdout.strip()
+        return adb_path
+    if os.environ.get('ANDROID_HOME'):
+        adb_path = os.path.join(os.environ['ANDROID_HOME'], 'platform-tools', 'adb' + suffix)
+        if os.path.exists(adb_path):
             return adb_path
-        if os.environ.get('ANDROID_HOME'):
-            adb_path = os.path.join(os.environ['ANDROID_HOME'], 'platform-tools', 'adb.exe')
-            if os.path.exists(adb_path):
-                return adb_path
-    else:  # Assuming a Unix-like system
-        if subprocess.call(['which', 'adb'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
-            adb_path = subprocess.check_output(['which', 'adb']).decode('utf-8').strip()
-            return adb_path
-        if os.environ.get('ANDROID_HOME'):
-            adb_path = os.path.join(os.environ['ANDROID_HOME'], 'platform-tools', 'adb')
-            if os.path.exists(adb_path):
-                return adb_path
 
     return ''
 
@@ -222,6 +226,10 @@ def find_devices(adb: str) -> typing.List[Device]:
 
 
 def get_device_serial(adb, address):
+    """
+    Get the real serial from the device.
+    The `adb devices` output is ip:port if it is wireless connected.
+    """
     if not is_ip_port(address):
         return address
     cmd = [adb, '-s', address, 'shell', 'getprop ro.boot.serialno']
@@ -229,13 +237,13 @@ def get_device_serial(adb, address):
 
 
 def get_device_name(adb, address):
+    """
+    Get the human readable device name.
+    """
     cmds = [
         'settings get secure bluetooth_name',
         'getprop persist.sys.device_name',
         'settings get global device_name',
-        # 'getprop ro.product.marketname',
-        # 'getprop ro.product.odm.marketname',
-        # 'getprop ro.product.vendor.marketname',
     ]
     for cmd in cmds:
         full_cmd = [adb, '-s', address, 'shell', cmd]
@@ -243,7 +251,9 @@ def get_device_name(adb, address):
         if output and output != 'null':
             return output
 
+
 def is_ip_port(address: str) -> bool:
+    """Check whether a string is an IP:Port address."""
     return re.match(r'^\d+\.\d+\.\d+\.\d+:\d+$', address) is not None
 
 
