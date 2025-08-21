@@ -5,19 +5,18 @@ import posixpath
 import shutil
 import typing
 
-import pathspec
 
-DirScanResultType = typing.Tuple[typing.Dict[str, int], typing.Dict[str, typing.Tuple[int, float]]]
+DirScanResultType = typing.Tuple[typing.Dict[str, float], typing.Dict[str, typing.Tuple[int, float]]]
 
 
-def scan_dir(root: str, subdir: str = "", filter: pathspec.PathSpec = None) -> DirScanResultType:
+def scan_dir(root: str, subdir: str, exclude_path: typing.Callable[[str], bool]) -> DirScanResultType:
     """Scan a local directory and return a tuple of directories and files with their metadata."""
     dirs, files = {}, {}
     base = os.path.join(root, subdir)
     for dirpath, _, filenames in os.walk(base):
         rel_dirpath = os.path.relpath(dirpath, root).replace("\\", "/")
         try:
-            if not filter.match_file(rel_dirpath):
+            if not exclude_path(rel_dirpath):
                 stat = os.stat(dirpath)
                 dirs[rel_dirpath] = stat.st_mtime
             # else:
@@ -28,7 +27,7 @@ def scan_dir(root: str, subdir: str = "", filter: pathspec.PathSpec = None) -> D
         for name in filenames:
             full_path = os.path.join(dirpath, name)
             rel_path = os.path.relpath(full_path, root).replace("\\", "/")
-            if filter.match_file(rel_path):
+            if exclude_path(rel_path):
                 # print(f'Exclude {rel_path}')
                 continue
             try:
@@ -71,26 +70,26 @@ def sync_file(old_file: str, new_file: str, support_hardlink) -> bool:
     return support_hardlink
 
 
-def remove_excluded(root, source_dir, filter: pathspec.PathSpec):
-    """Remove files and directories that match the filter."""
+def remove_excluded(root, source_dir, exclude_path: typing.Callable[[str], bool]):
+    """Remove files and directories that match the exclude_path."""
     if not os.path.isdir(root):
         return
     if not source_dir:
         source_dir = ""
     full_path = posixpath.join(root, source_dir)
     for dirpath, dirnames, filenames in os.walk(full_path, topdown=False):
-        # Remove files that match the filter
+        # Remove files that match the exclude_path
         dirpath = dirpath.replace("\\", "/")
         for name in filenames:
             rel_path = posixpath.relpath(posixpath.join(dirpath, name), root)
-            if filter.match_file(rel_path):
+            if exclude_path(rel_path):
                 file_path = posixpath.join(dirpath, name)
                 # print(f"Removing file: {file_path}")
                 os.remove(file_path)
-        # Remove directories that match the filter
+        # Remove directories that match the exclude_path
         for name in dirnames:
             rel_path = posixpath.relpath(posixpath.join(dirpath, name), root)
-            if filter.match_file(rel_path):
+            if exclude_path(rel_path):
                 dir_path = posixpath.join(dirpath, name)
                 # print(f"Removing directory: {dir_path}")
                 shutil.rmtree(dir_path, ignore_errors=True)

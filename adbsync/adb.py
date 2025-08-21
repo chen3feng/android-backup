@@ -32,7 +32,7 @@ def remove_nested_dirs(dirs):
 def load_exclude_file(exclude_file: str) -> pathspec.PathSpec:
     if not exclude_file:
         return pathspec.PathSpec([])
-    with open(exclude_file, 'r') as fh:
+    with open(exclude_file, 'r', encoding='utf-8') as fh:
         spec = pathspec.PathSpec.from_lines('gitwildmatch', fh)
         return spec
 
@@ -65,7 +65,7 @@ class ADB():
         return full_cmd
 
     def pull(self, source_dirs, target_dir, old_backup_dir, exclude_file):
-        filter = load_exclude_file(exclude_file)
+        exclude = load_exclude_file(exclude_file)
         for include_dir in source_dirs:
             parts = include_dir.split('/./')
             if len(parts) < 2:
@@ -76,24 +76,24 @@ class ADB():
                 source_dir=parts[1],
                 target_dir=target_dir,
                 old_backup_dir=old_backup_dir,
-                filter=filter,
+                exclude_path=exclude.match_file,
             )
 
-    def pull_one_dir(self, root, source_dir, target_dir, old_backup_dir, filter):
+    def pull_one_dir(self, root, source_dir, target_dir, old_backup_dir, exclude_path):
         print(f"Pulling {posixpath.join(root, source_dir)}...")
         try:
-            remote_dirs, remote_files = self.scan_remote_dir(root, source_dir, filter)
+            remote_dirs, remote_files = self.scan_remote_dir(root, source_dir, exclude_path)
         except subprocess.CalledProcessError:
             print(f"Failed to scan remote directory {source_dir}")
             return
 
         if local_fs.is_valid_old_backup_dir(old_backup_dir, target_dir):
-            self.local_sync(old_backup_dir, remote_dirs, remote_files, target_dir, source_dir, filter)
+            self.local_sync(old_backup_dir, remote_dirs, remote_files, target_dir, source_dir)
 
-        self.pull_dirs(root, remote_dirs, target_dir, filter)
+        self.pull_dirs(root, remote_dirs, target_dir, exclude_path)
         self.pull_files(root, remote_dirs, remote_files, target_dir)
 
-    def scan_remote_dir(self, root, source_dir, filter) -> typing.Tuple[dict, dict]:
+    def scan_remote_dir(self, root, source_dir, exclude_path) -> typing.Tuple[dict, dict]:
         """Scan remote dir, obtain all. its dir and files names and attributes"""
         # Use the `find` command to recursively list all files and non-empty directories.
         # For each entry, print:
@@ -109,11 +109,11 @@ class ADB():
         find_cmd = rf'find "{full_dir}" \( -type f -or -type d ! -empty \) -printf "%M %s %T@ /%P/\n"'
         cmd = ['shell', find_cmd]
         output = self.check_output(cmd)
-        dirs, files = self.parse_find_output(root, source_dir, output, filter)
+        dirs, files = self.parse_find_output(root, source_dir, output, exclude_path)
         self.remove_empty_dirs(dirs, files)
         return dirs, files
 
-    def parse_find_output(self, root, source_dir, output, filter):
+    def parse_find_output(self, root, source_dir, output, exclude_path):
         """Parse the output of the `find` command, return all dir and file attributes."""
         dirs, files = {}, {}
         for line in output.splitlines():
@@ -126,7 +126,7 @@ class ADB():
             size = int(parts[1])
             mtime = float(parts[2])
             path = parts[3].strip('/') # Remove the enclosing slashes, see `scan_remote_dir`
-            if not filter.match_file(path):
+            if not exclude_path(path):
                 rel_path = posixpath.join(source_dir, path) if path else source_dir
                 if mode.startswith('d'):
                     dirs[rel_path] = mtime
@@ -147,7 +147,7 @@ class ADB():
         for d in empty:
             dirs.pop(d)
 
-    def local_sync(self, old_backup_dir, remote_dirs, remote_files, target_dir, source_dir, filter):
+    def local_sync(self, old_backup_dir, remote_dirs, remote_files, target_dir, source_dir):
         """Sync file from old backup."""
         print(f'Syncing {posixpath.join(old_backup_dir, source_dir)} to {target_dir}')
         support_hardlink = None
@@ -184,13 +184,13 @@ class ADB():
             print('')
 
 
-    def pull_dirs(self, root, remote_dirs, target_dir, filter):
+    def pull_dirs(self, root, remote_dirs, target_dir, exclude_path):
         """Pull directories from the remote device to the target directory."""
-        # Remove directories that match the filter
+        # Remove directories that match the exclude_path
         pull_dirs = self.get_pull_dirs(remote_dirs, target_dir)
         for pull_dir in pull_dirs:
-            if not filter.match_file(pull_dir):
-                self.pull_dir(root, pull_dir, target_dir, remote_dirs, filter)
+            if not exclude_path(pull_dir):
+                self.pull_dir(root, pull_dir, target_dir, remote_dirs, exclude_path)
 
     def get_pull_dirs(self, remote_dirs, target_dir):
         """Get the pull command for a directory."""
@@ -202,7 +202,7 @@ class ADB():
                 pull_dirs.append(remote_dir)
         return remove_nested_dirs(pull_dirs)
 
-    def pull_dir(self, root, source_dir, target_dir, remote_dirs, filter):
+    def pull_dir(self, root, source_dir, target_dir, remote_dirs, exclude_path):
         """Pull a directory from the device."""
         # Construct the pull command
         # Note the use of '-a' to preserve file attributes
@@ -213,8 +213,8 @@ class ADB():
         local_fs.makedirs(dest_dir, remote_dirs.get(parent_dir))
         cmd = ['pull', '-a', posixpath.join(root, source_dir) + '/', dest_dir]
         self.call(cmd)
-        # adb pull doesn't support exclude option, remove them from the target_dir.
-        local_fs.remove_excluded(target_dir, source_dir, filter)
+        # adb pull doesn't support exclude option, remove excluded files from the target_dir after download.
+        local_fs.remove_excluded(target_dir, source_dir, exclude_path)
 
     def pull_files(self, root, remote_dirs, files, target_dir):
         """Pull files from the remote device to the target directory."""
@@ -251,6 +251,7 @@ class ADB():
         return 1
 
     def get_pull_files(self, remote_files, target_dir):
+        """Get the remote files need to be pulled to local."""
         result = []
         for path, (rf_size, rf_mtime) in remote_files.items():
             local_path = os.path.join(target_dir, path)

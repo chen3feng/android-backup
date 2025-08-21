@@ -1,3 +1,17 @@
 #!/bin/bash
 
-/usr/bin/env python3 "$(dirname $0)/backup.py" "$@"
+check_dependency() {
+    if ! command -v $1 >/dev/null; then
+        echo "Can't find $1, please run 'setup.sh' or install it manually."
+        exit 1
+    fi
+}
+
+check_dependency adb
+check_dependency ffmpeg
+check_dependency exiftool
+
+/usr/bin/env python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt >/dev/null
+python3 "$(dirname $0)/backup.py" "$@"

@@ -230,8 +230,8 @@ def compress_multiple_remote_video(full_paths, quality, dry_run: bool) -> int:
         for i, (full_path, size) in enumerate(full_paths.items()):
             print(f"Processing {i+1}/{len(full_paths)} file: {full_path}")
             if size < 1*MB:
-                print(f"File{full_path} is too small to be worth compressing, skipping.")
-                skipped_count += 1
+                print(f"File size {size} is too small to be worth compressing, skipping.\n")
+                counters[CompressResult.Skipped] += 1
                 continue
             result = compress_remote_video(full_path, tmpdir, quality, dry_run)
             counters[result] += 1
