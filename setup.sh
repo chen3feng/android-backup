@@ -44,33 +44,11 @@ linux::check_or_install() {
         return
     fi
 
-    if [[ $# == 2 ]]; then
-        sudo $install $2
-    else
-        sudo $install $1
-    fi
-
-    if [[ $? -ne 0 ]]; then
-        exit 1
-    fi
-}
-
-linux::check_or_install_adb() {
-    if command -v $1 >/dev/null; then
-        echo "Already installed: adb"
-        return 0
-    fi
-
-    if command -v apt >/dev/null; then
-        sudo apt install -y adb
-    elif command -v dnf >/dev/null; then
-        sudo dnf install -y android-tools
-    elif command -v yum >/dev/null; then
-        sudo yum install -y android-tools
-    else
-        echo "Unknown Linux distribution"
-        exit 1
-    fi
+    for name in "$@" ; do
+        if sudo $install $name; then
+			break
+		fi
+    done
 
     if [[ $? -ne 0 ]]; then
         exit 1
@@ -78,9 +56,9 @@ linux::check_or_install_adb() {
 }
 
 linux::setup() {
-    linux::check_or_install_adb
+    linux::check_or_install adb android-tools
     linux::check_or_install ffmpeg
-    linux::check_or_install exiftool
+    linux::check_or_install exiftool perl-Image-ExifTool
 }
 
 main() {
