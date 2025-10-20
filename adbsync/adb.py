@@ -44,17 +44,20 @@ class ADB():
 
     def call(self, cmd: typing.List[str], *args, **kwargs) -> int:
         full_cmd = self.extend_cmd(cmd)
-        # print(f"Running command: {' '.join(full_cmd)}")
+        # print(f"Calling command: {' '.join(full_cmd)}")
+        kwargs.setdefault('errors', 'replace')
         return subprocess.call(full_cmd, *args, **kwargs)
 
     def run(self, cmd: typing.List[str], *args, **kwargs) -> subprocess.CompletedProcess:
         full_cmd = self.extend_cmd(cmd)
         # print(f"Running command: {' '.join(full_cmd)}")
+        kwargs.setdefault('errors', 'replace')
         return subprocess.run(full_cmd, *args, **kwargs)
 
     def check_output(self, cmd: typing.List[str], *args, **kwargs) -> str:
         full_cmd = self.extend_cmd(cmd)
-        # print(f"Running command: {' '.join(full_cmd)}")
+        # print(f"Running output command: {' '.join(full_cmd)}")
+        kwargs.setdefault('errors', 'replace')
         return subprocess.check_output(full_cmd, text=True, *args, **kwargs)
 
     def extend_cmd(self, cmd: typing.List[str]) -> typing.List[str]:
@@ -95,23 +98,35 @@ class ADB():
 
     def scan_remote_dir(self, root, source_dir, exclude_path) -> typing.Tuple[dict, dict]:
         """Scan remote dir, obtain all. its dir and files names and attributes"""
-        # Use the `find` command to recursively list all files and non-empty directories.
-        # For each entry, print:
-        #   - File mode (%M)
-        #   - Size in bytes (%s)
-        #   - Modification timestamp (%T@)
-        #   - Relative path (%P), enclosed in slashes: /relative/path/
-        #
-        # Wrapping the relative path in slashes makes it easier to:
-        #   - Unambiguously detect blank or whitespace-containing paths
-        #   - Treat the root directory (empty %P) consistently as `//`
         full_dir = posixpath.join(root, source_dir)
-        find_cmd = rf'find "{full_dir}" \( -type f -or -type d ! -empty \) -printf "%M %s %T@ /%P/\n"'
+        find_cmd = self.get_find_command(full_dir)
         cmd = ['shell', find_cmd]
         output = self.check_output(cmd)
         dirs, files = self.parse_find_output(root, source_dir, output, exclude_path)
         self.remove_empty_dirs(dirs, files)
         return dirs, files
+
+    def get_find_command(self, full_dir: str) -> str:
+        # Use the `find` command to recursively list all files and non-empty directories.
+        # For each entry, print:
+        #   - File mode (%M)
+        #   - Size in bytes (%s)
+        #   - Modification timestamp (%T@)
+        #   - Relative path (%P), enclosed in slashes: |/absolute/path|
+        #
+        # Wrapping the relative path in pipes makes it easier to:
+        #   - Unambiguously detect blank or whitespace-containing paths
+        #   - Treat the root directory (empty %P) consistently as `||`
+        if self.find_support_printf():
+            return rf'find "{full_dir}" \( -type f -or -type d ! -empty \) -printf "%M %s %T@ |%p|\n"'
+        else:
+            exec_cmd = r'stat -c "%A %s %Y |%n|" {} \;'
+            return rf'find "{full_dir}" \( -type f -or -type d ! -empty \) -exec {exec_cmd}'
+    
+    def find_support_printf(self) -> bool:
+        find_cmd = 'find /bin -maxdepth 1 -printf ""'
+        cmd = ['shell', find_cmd]
+        return self.call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
 
     def parse_find_output(self, root, source_dir, output, exclude_path):
         """Parse the output of the `find` command, return all dir and file attributes."""
@@ -125,7 +140,10 @@ class ADB():
             mode = parts[0]
             size = int(parts[1])
             mtime = float(parts[2])
-            path = parts[3].strip('/') # Remove the enclosing slashes, see `scan_remote_dir`
+            path = parts[3].strip('|') # Remove the enclosing slashes, see `get_find_command`
+            prefix = posixpath.join(root, source_dir)
+            path = path.removeprefix(prefix)
+            path = path.removeprefix('/')
             if not exclude_path(path):
                 rel_path = posixpath.join(source_dir, path) if path else source_dir
                 if mode.startswith('d'):
@@ -204,6 +222,7 @@ class ADB():
 
     def pull_dir(self, root, source_dir, target_dir, remote_dirs, exclude_path):
         """Pull a directory from the device."""
+        print(f'Pulling {source_dir}')
         # Construct the pull command
         # Note the use of '-a' to preserve file attributes
         # Add a slash after the source dir to pull the whole directory.
@@ -229,6 +248,10 @@ class ADB():
         remote_path = posixpath.join(root, file_path)
         local_path = posixpath.join(target_dir, file_path)
         parent_dir = posixpath.dirname(file_path)
+        if parent_dir not in remote_dirs:
+            # Maybe caused by CHinese messy code
+            print(f'Remote dir {parent_dir} does not in remote_dirs')
+            return 1
         local_fs.makedirs(posixpath.join(target_dir, parent_dir), remote_dirs[parent_dir])
         # On windows, some Chinese filenames can be truncated when the target file name is not specified explicitly.
         # Always specify the full filename rather than only the target directory.
