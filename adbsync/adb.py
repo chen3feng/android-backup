@@ -120,13 +120,13 @@ class ADB():
         else:
             exec_cmd = r'stat -c "%A %s %Y |%n|" {} \;'
             return rf'find "{full_dir}" \( -type f -or -type d ! -empty \) -exec {exec_cmd}'
-    
+
     def find_support_printf(self) -> bool:
         find_cmd = 'find /bin -maxdepth 1 -printf ""'
         cmd = ['shell', find_cmd]
         return self.call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
 
-    def parse_find_output(self, source_dir, output, exclude_path):
+    def parse_find_output(self, root, source_dir, output, exclude_path):
         """Parse the output of the `find` command, return all dir and file attributes."""
         dirs, files = {}, {}
         for line in output.splitlines():
