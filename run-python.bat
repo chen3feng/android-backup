@@ -1,6 +1,8 @@
 @echo off
 setlocal enabledelayedexpansion
 
+set "PATH=%PATH%;%~dp0deps\ffmpeg\bin;%~dp0deps\ExifTool"
+
 set PYTHON=which
 
 call %~dp0check-env.bat

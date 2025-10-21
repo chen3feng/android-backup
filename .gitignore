@@ -1,5 +1,6 @@
 /backups
 /devices
+/deps
 
 !/devices/example.conf
 

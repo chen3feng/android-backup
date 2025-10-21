@@ -5,6 +5,7 @@ Backup files from device to local storage incrementally.
 import collections
 import os
 import posixpath
+import pprint
 import re
 import subprocess
 import sys
@@ -44,10 +45,13 @@ def main() -> int:  # pylint: disable=missing-function-docstring
         else:
             print(f'  serial={device.serial} name="{device.name}" address={device.address}')
 
+    if not add_devices_config(devices):
+        print(1234)
+        return 1
+
     device_configs = load_device_configs(devices)
     if not device_configs:
         return 1
-
     ret = 0
     for device in devices:
         if pull_device(adb_path, device, config, device_configs[device.serial]) != 0:
@@ -69,6 +73,45 @@ def load_device_configs(devices: typing.List[Device]) -> typing.Dict[str, types.
             return {}
         device_configs[device.serial] = config
     return device_configs
+
+
+def add_devices_config(devices: typing.List[Device]) -> bool:
+    print('Add devices')
+    for device in devices:
+        config_path = os.path.join(os.path.dirname(__file__), 'devices', f'{device.serial}.conf')
+        if os.path.exists(config_path):
+            print(f'config_path {config_path} already exists')
+            continue
+        if not create_config(config_path, device):
+            return False
+    return True
+
+
+DEFAULT_INCLUDE_DIRS = [
+    # The path contains the root directory and the source directory.
+    # They are separated by /./.
+    # For example:
+    # Sync the Documents directory to local Documents under the backup directory.
+    "/sdcard/./Documents",
+    "/sdcard/./DCIM",
+    "/sdcard/./Documents",
+    "/sdcard/./Download",
+    "/sdcard/./Movies",
+    "/sdcard/./Music",
+    "/sdcard/./Pictures",
+
+    # The directory can also be a subdirectory
+    # The follow lines sync QQ and Weixin files to tencent directory under the backup directory.
+    "/sdcard/./tencent/qqfile_recv",
+    "/sdcard/./tencent/micromsg/weixin",
+]
+
+def create_config(config_path: str, device: Device) -> bool:
+    print(f'config_path={config_path}')
+    with open(config_path, 'w', encoding='utf8') as f:
+        print(f'BACKUP_DIR = "{device.name}"', file=f)
+        print(f'INCLUDE_DIRS = {pprint.pformat(DEFAULT_INCLUDE_DIRS, indent=4)}', file=f)
+    return True
 
 
 def pull_device(adb_path, device, config, device_config):
