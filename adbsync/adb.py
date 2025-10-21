@@ -1,7 +1,5 @@
-import itertools
 import os
 import posixpath
-import shlex
 import shutil
 import subprocess
 import sys
@@ -128,7 +126,7 @@ class ADB():
         cmd = ['shell', find_cmd]
         return self.call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
 
-    def parse_find_output(self, root, source_dir, output, exclude_path):
+    def parse_find_output(self, source_dir, output, exclude_path):
         """Parse the output of the `find` command, return all dir and file attributes."""
         dirs, files = {}, {}
         for line in output.splitlines():
